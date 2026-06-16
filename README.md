@@ -160,7 +160,6 @@ Rule: No direct pushes to `main`. All changes via PR.
 
 | Name | Role | Responsibilities |
 |---|---|---|
-| Eliana Mejia | Lead Engineer | Schema, API contracts, infra, scope control |
 | Jose Montero | Frontend Engineer | UI generation, Leaflet map, animations, API integration |
 | Gabriel Paez | Backend Engineer | RAG pipeline, vision matching, PostGIS, N8N, seed data |
 
