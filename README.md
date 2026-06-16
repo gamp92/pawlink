@@ -122,24 +122,80 @@ See `.env.example` for the full list. Required:
 
 ```
 pawlink/
-├── app/                    # Next.js 14 app router
-│   ├── (public)/           # Public-facing pages
-│   │   ├── find-a-pet/     # F2 — Smart Adoption gallery
-│   │   ├── lost-found/     # F3 — Lost & Found map
-│   │   └── shelter/[id]/   # Public shelter profile + RAG chat
-│   └── (shelter)/          # Shelter dashboard (private)
-│       └── dashboard/      # F1 — Shelter Hub
-├── api/
-│   ├── rag/                # RAG query Vercel Function
-│   ├── vision/             # Rekognition Vercel Function
-│   └── matching/           # Compatibility matching Vercel Function
-├── components/             # Shared UI components
-├── lib/                    # Supabase client, helpers
-├── docs/
-│   ├── schema.sql          # Supabase schema (source of truth)
-│   └── api-contracts/      # API endpoint contracts per feature
-└── scripts/
-    └── seed.py             # Fake data generator (CDMX coordinates)
+│
+├── README.md
+├── CLAUDE.md
+├── .env.example
+├── .gitignore
+├── next.config.js
+├── tailwind.config.js
+├── tsconfig.json
+├── package.json
+│
+├── app/                          # Next.js 14 app router
+│   ├── layout.tsx                # Root layout — fonts, global providers
+│   ├── page.tsx                  # Public landing page
+│   │
+│   ├── (public)/                 # Public routes — no login required
+│   │   ├── find-a-pet/
+│   │   │   └── page.tsx          # F2 — Animal gallery
+│   │   ├── shelter/
+│   │   │   └── [id]/
+│   │   │       └── page.tsx      # Public shelter profile + RAG chat
+│   │   └── lost-found/
+│   │       └── page.tsx          # F3 — Map + reports
+│   │
+│   └── (shelter)/                # Private routes — shelter only
+│       ├── layout.tsx            # Sidebar + auth guard
+│       └── dashboard/
+│           ├── page.tsx          # F1 — Main dashboard
+│           ├── animals/
+│           │   └── page.tsx      # Animal inventory
+│           ├── requests/
+│           │   └── page.tsx      # Adoption requests
+│           └── documents/
+│               └── page.tsx      # Doc upload for RAG
+│
+├── api/                          # Vercel Functions (serverless backend)
+│   ├── rag/
+│   │   └── route.ts              # RAG query — retrieval + Groq + streaming
+│   ├── vision/
+│   │   └── route.ts              # Rekognition — photo comparison
+│   └── matching/
+│       └── route.ts              # Groq matching — family-animal compatibility
+│
+├── components/                   # Reusable UI components
+│   ├── ui/                       # shadcn/ui — auto-generated
+│   ├── shelter/                  # Private dashboard components
+│   ├── public/                   # Public page components
+│   └── shared/                   # Used on both sides
+│       ├── AnimalCard.tsx
+│       ├── ShelterProfile.tsx
+│       └── RagChat.tsx
+│
+├── lib/                          # Shared logic and clients
+│   ├── supabase/
+│   │   ├── client.ts             # Browser client (ANON KEY)
+│   │   └── server.ts             # Server client (SERVICE ROLE KEY)
+│   ├── groq.ts                   # Groq API client
+│   ├── rekognition.ts            # AWS Rekognition client
+│   └── utils.ts                  # General helpers
+│
+├── rag/                          # Full RAG pipeline
+│   ├── ingest.py                 # PDF ingestion — runs in Edge Function
+│   ├── embeddings.py             # Local sentence-transformers
+│   └── chain.py                  # LangChain LCEL chain
+│
+├── scripts/
+│   └── seed.py                   # Fake data — 5 shelters, 50 animals, CDMX coords
+│
+└── docs/
+    ├── schema.sql                # Supabase schema — source of truth
+    └── api-contracts/
+        ├── f1-shelter-hub.md
+        ├── f2-smart-adoption.md
+        ├── f3-lost-found.md
+        └── f4-rag-assistant.md
 ```
 
 ---
