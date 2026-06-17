@@ -197,3 +197,48 @@ F4 (RAG Shelter Assistant) is built if the team is ahead of schedule after F1–
 ## Questions or blockers
 
 If something is unclear — especially about the schema, API contracts, or RAG pipeline — stop and ask rather than making assumptions. The worst outcome is frontend and backend building against different data shapes and having to redo work at integration time.
+
+## Key decisions made during planning
+
+### Business model
+Pawlink is B2B SaaS — shelters are the paying client, not the public.
+The public uses the app for free and reaches it through the shelter's
+own channels (Instagram, Facebook, direct contact). This resolves the
+two-sided distribution problem. Reference: Pawlytics ($29-49/mo),
+Shelterluv ($2/adoption).
+
+### Architecture decisions
+- No Railway, no Docker, no dedicated servers — everything serverless
+- Vercel Functions for RAG queries and vision matching (10s limit is
+  sufficient for demo scale)
+- Supabase Edge Functions for document ingestion only (150s limit)
+- GitHub Actions not needed — Vercel auto-deploys on push to main
+
+### Deployment
+- Every push to main auto-deploys to Vercel (configured once, automatic forever)
+- Branch strategy: main (production) → dev (integration) → feat/* (features)
+- No direct pushes to main — all changes via PR
+
+### Scope decisions
+- F1, F2, F3 are must-have for Demo Day
+- F4 (RAG) is stretch — only if F1-F3 are done and time allows
+- Community module and MCP Server are explicitly out of scope for MVP
+- Volunteer module removed from F1
+
+### Fake data for testing
+- Seed script generates data with real CDMX coordinates
+- Gmail aliases for geo-testing:
+  - test+near@gmail.com  → ~400m  (receives alerts)
+  - test+mid@gmail.com   → ~1.2km (receives alerts)
+  - test+far@gmail.com   → ~4km   (does NOT receive alerts)
+- Coordinates and photos are always independent — no real GPS needed
+
+### Current state
+- Repo created: https://github.com/gamp92/pawlink
+- Structure created: app/, components/, lib/, rag/, scripts/, docs/
+- Schema ready: docs/schema.sql (not yet run in Supabase)
+- API contracts ready: docs/api-contracts/f1-f4
+- API stubs ready: app/api/* (frontend unblocked)
+- Supabase project: not created yet
+- Vercel: not connected yet
+- Next step: create Supabase project, run schema.sql, connect to Vercel
