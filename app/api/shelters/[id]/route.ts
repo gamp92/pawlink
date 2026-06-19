@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { createServerClient } from '@/lib/supabase/server'
 
 // GET /api/shelters/:id
 // Returns public profile of a shelter — no auth required
@@ -7,23 +8,33 @@ export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  // TODO: replace with real Supabase query by shelter id
-  return NextResponse.json({
-    shelter: {
-      id: params.id,
-      name: "Refugio Patitas",
-      description: "Somos una fundación dedicada al rescate y adopción responsable de animales en CDMX desde 2018.",
-      city: "CDMX",
-      address: "Colonia Roma Norte, CDMX",
-      cover_photo: "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=800",
-      instagram_url: "https://instagram.com/refugiopatitas",
-      website_url: null,
-      founded_year: 2018,
-      stats: {
-        total_animals: 23,
-        available_animals: 18,
-        total_adoptions: 142
-      }
+  const supabase = createServerClient()
+
+  const [shelterResult, animalsResult] = await Promise.all([
+    supabase
+      .from('shelters')
+      .select('id, name, description, city, address, cover_photo, instagram_url, website_url, founded_year')
+      .eq('id', params.id)
+      .single(),
+    supabase
+      .from('animals')
+      .select('status')
+      .eq('shelter_id', params.id),
+  ])
+
+  if (shelterResult.error) {
+    if (shelterResult.error.code === 'PGRST116') {
+      return NextResponse.json({ error: 'Shelter not found' }, { status: 404 })
     }
-  }, { status: 200 })
+    return NextResponse.json({ error: shelterResult.error.message }, { status: 500 })
+  }
+
+  const animals = animalsResult.data ?? []
+  const stats = {
+    total_animals: animals.length,
+    available_animals: animals.filter((a: any) => a.status === 'available').length,
+    total_adoptions: animals.filter((a: any) => a.status === 'adopted').length,
+  }
+
+  return NextResponse.json({ shelter: { ...shelterResult.data, stats } }, { status: 200 })
 }

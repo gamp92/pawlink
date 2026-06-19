@@ -1,74 +1,75 @@
 import { NextResponse } from 'next/server'
+import { createServerClient } from '@/lib/supabase/server'
 
 // GET /api/adoption-requests
 // Returns adoption requests for the authenticated shelter
 // Contract: docs/api-contracts/f1-shelter-hub.md
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
+  const shelter_id = searchParams.get('shelter_id')
   const status = searchParams.get('status')
 
-  // TODO: replace with real Supabase query filtered by shelter_id
-  return NextResponse.json({
-    requests: [
-      {
-        id: "req-0001",
-        status: "pending",
-        compatibility_score: 94.5,
-        compatibility_reasons: ["Calm temperament", "Good with kids"],
-        animal: {
-          id: "550e8400-e29b-41d4-a716-446655440000",
-          name: "Luna",
-          photo_urls: ["https://images.unsplash.com/photo-1552053831-71594a27632d?w=400"]
-        },
-        family: {
-          full_name: "Ana García",
-          email: "ana@email.com",
-          living_space: "apartment",
-          has_children: true,
-          has_other_pets: false
-        },
-        created_at: "2025-06-09T00:00:00Z"
-      },
-      {
-        id: "req-0002",
-        status: "seen",
-        compatibility_score: 78.0,
-        compatibility_reasons: ["Moderate lifestyle match", "Has pet experience"],
-        animal: {
-          id: "550e8400-e29b-41d4-a716-446655440002",
-          name: "Bruno",
-          photo_urls: ["https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=400"]
-        },
-        family: {
-          full_name: "Carlos López",
-          email: "carlos@email.com",
-          living_space: "house_yard",
-          has_children: false,
-          has_other_pets: true
-        },
-        created_at: "2025-06-08T00:00:00Z"
-      }
-    ]
-  }, { status: 200 })
+  if (!shelter_id) {
+    return NextResponse.json({ error: 'shelter_id is required' }, { status: 400 })
+  }
+
+  const supabase = createServerClient()
+
+  let query = supabase
+    .from('adoption_requests')
+    .select(`
+      id, status, compatibility_score, compatibility_reasons, notes, created_at,
+      animals ( id, name, photo_urls ),
+      family_profiles ( full_name, email, living_space, has_children, has_other_pets )
+    `)
+    .eq('shelter_id', shelter_id)
+    .order('created_at', { ascending: false })
+
+  if (status) query = query.eq('status', status)
+
+  const { data, error } = await query
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  const requests = data.map((r: any) => ({
+    id: r.id,
+    status: r.status,
+    compatibility_score: r.compatibility_score,
+    compatibility_reasons: r.compatibility_reasons ? JSON.parse(r.compatibility_reasons) : [],
+    notes: r.notes,
+    animal: r.animals,
+    family: r.family_profiles,
+    created_at: r.created_at,
+  }))
+
+  return NextResponse.json({ requests }, { status: 200 })
 }
 
-// POST /api/adoption-requests
-// Submits adoption request from family to shelter
-// Contract: docs/api-contracts/f2-smart-adoption.md
+// POST /api/adoption-requests — F2, contract: docs/api-contracts/f2-smart-adoption.md
 export async function POST(request: Request) {
   const body = await request.json()
+  const { animal_id, shelter_id, family_id, living_space, lifestyle, experience, has_other_pets, has_children } = body
 
-  // TODO: replace with real Supabase insert + N8N email trigger
-  return NextResponse.json({
-    request: {
-      id: "req-" + Math.random().toString(36).substr(2, 6),
-      status: "pending",
-      animal_id: body.animal_id,
-      shelter_id: body.shelter_id,
-      created_at: new Date().toISOString()
-    },
-    message: "Request submitted. The shelter will contact you soon."
-  }, { status: 201 })
+  if (!animal_id || !shelter_id || !family_id) {
+    return NextResponse.json({ error: 'animal_id, shelter_id and family_id are required' }, { status: 400 })
+  }
+
+  const supabase = createServerClient()
+
+  const { data, error } = await supabase
+    .from('adoption_requests')
+    .insert({ animal_id, shelter_id, family_id, living_space, lifestyle, experience, has_other_pets, has_children })
+    .select('id, status, animal_id, shelter_id, created_at')
+    .single()
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json(
+    { request: data, message: 'Request submitted. The shelter will contact you soon.' },
+    { status: 201 }
+  )
 }
-
-// PATCH /api/adoption-requests/:id is in /api/adoption-requests/[id]/route.ts
