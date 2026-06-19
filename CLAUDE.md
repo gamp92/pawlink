@@ -231,16 +231,7 @@ Shelterluv ($2/adoption).
 
 ### Fake data for testing
 - Seed script generates: 5 shelters (CDMX), 50 animals, 20 family profiles, 10 lost/found reports
-- All seed users use password: `Pawlink2025!`
-- Gmail aliases for geo-alert testing (reference point: Parque México, Condesa):
-  - test+near@gmail.com    → CDMX ~400m   (receives alerts)
-  - test+mid@gmail.com     → CDMX ~1.2km  (receives alerts)
-  - test+far@gmail.com     → CDMX ~4km    (does NOT receive alerts)
-- Coverage testing users:
-  - test+madrid1@gmail.com → Madrid, Centro
-  - test+madrid2@gmail.com → Madrid, Barrio de Salamanca
-  - test+ecuador1@gmail.com → Quito, Ecuador
-  - test+ecuador2@gmail.com → Guayaquil, Ecuador
+- Geo-test users cover CDMX (near/mid/far from Parque México), Madrid, and Ecuador (Quito + Guayaquil)
 - Coordinates and photos are always independent — no real GPS needed
 
 ### Current state
