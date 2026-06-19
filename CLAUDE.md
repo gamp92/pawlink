@@ -241,5 +241,5 @@ Shelterluv ($2/adoption).
 - API contracts ready: docs/api-contracts/f1-f4
 - API stubs ready: app/api/* (frontend unblocked)
 - Supabase project: created — `pawlink` (ref: etxjyvjrinsvrnzqwmpf, region: us-east-1)
-- Vercel: not connected yet
-- Next step: run schema.sql in Supabase, create storage buckets, run seed.py, connect Vercel
+- Vercel: connected — https://pawlink-theta.vercel.app
+- Next step: F1 — Shelter Hub
