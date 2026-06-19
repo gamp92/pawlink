@@ -219,6 +219,10 @@ Shelterluv ($2/adoption).
 - Branch strategy: main (production) → dev (integration) → feat/* (features)
 - No direct pushes to main — all changes via PR
 
+### Region decision
+- Supabase hosted in `us-east-1` (Virginia) — chosen as geographic midpoint between LATAM and Europe
+- Avoids latency extremes: ~80-100ms from both regions vs. optimizing for one
+
 ### Scope decisions
 - F1, F2, F3 are must-have for Demo Day
 - F4 (RAG) is stretch — only if F1-F3 are done and time allows
@@ -226,11 +230,8 @@ Shelterluv ($2/adoption).
 - Volunteer module removed from F1
 
 ### Fake data for testing
-- Seed script generates data with real CDMX coordinates
-- Gmail aliases for geo-testing:
-  - test+near@gmail.com  → ~400m  (receives alerts)
-  - test+mid@gmail.com   → ~1.2km (receives alerts)
-  - test+far@gmail.com   → ~4km   (does NOT receive alerts)
+- Seed script generates: 5 shelters (CDMX), 50 animals, 20 family profiles, 10 lost/found reports
+- Geo-test users cover CDMX (near/mid/far from Parque México), Madrid, and Ecuador (Quito + Guayaquil)
 - Coordinates and photos are always independent — no real GPS needed
 
 ### Current state
@@ -239,6 +240,6 @@ Shelterluv ($2/adoption).
 - Schema ready: docs/schema.sql (not yet run in Supabase)
 - API contracts ready: docs/api-contracts/f1-f4
 - API stubs ready: app/api/* (frontend unblocked)
-- Supabase project: not created yet
+- Supabase project: created — `pawlink` (ref: etxjyvjrinsvrnzqwmpf, region: us-east-1)
 - Vercel: not connected yet
-- Next step: create Supabase project, run schema.sql, connect to Vercel
+- Next step: run schema.sql in Supabase, create storage buckets, run seed.py, connect Vercel
