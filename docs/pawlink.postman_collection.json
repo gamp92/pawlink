@@ -1,0 +1,220 @@
+{
+  "info": {
+    "name": "Pawlink API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "https://pawlink-theta.vercel.app" },
+    { "key": "shelter_id", "value": "0ef73e8c-99fd-42d8-9c31-c6257026dbc6" },
+    { "key": "animal_id", "value": "feb2a852-e78d-43a6-abab-2a0447b31b90" },
+    { "key": "report_id", "value": "c3134c42-dca6-4804-b4fe-52e7c35e21a6" }
+  ],
+  "item": [
+    {
+      "name": "F1 — Shelter Hub",
+      "item": [
+        {
+          "name": "GET /api/animals",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/animals?shelter_id={{shelter_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "animals"],
+              "query": [
+                { "key": "shelter_id", "value": "{{shelter_id}}" },
+                { "key": "status", "value": "available", "disabled": true },
+                { "key": "species", "value": "dog", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/animals",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/animals", "host": ["{{base_url}}"], "path": ["api", "animals"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shelter_id\": \"{{shelter_id}}\",\n  \"name\": \"Firulais\",\n  \"species\": \"dog\",\n  \"breed\": \"Mestizo\",\n  \"age_years\": 3,\n  \"size\": \"medium\",\n  \"gender\": \"male\",\n  \"color\": \"café\",\n  \"description\": \"Perro muy cariñoso y juguetón.\",\n  \"energy_level\": \"high\",\n  \"good_with_kids\": true,\n  \"good_with_pets\": false,\n  \"vaccinated\": true,\n  \"sterilized\": false,\n  \"photo_urls\": []\n}"
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/animals/:id",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/animals/{{animal_id}}", "host": ["{{base_url}}"], "path": ["api", "animals", "{{animal_id}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"in_process\",\n  \"medical_notes\": \"Needs follow-up vaccination\"\n}"
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/animals/:id",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{base_url}}/api/animals/{{animal_id}}", "host": ["{{base_url}}"], "path": ["api", "animals", "{{animal_id}}"] }
+          }
+        },
+        {
+          "name": "GET /api/adoption-requests",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/adoption-requests?shelter_id={{shelter_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "adoption-requests"],
+              "query": [
+                { "key": "shelter_id", "value": "{{shelter_id}}" },
+                { "key": "status", "value": "pending", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/adoption-requests/:id",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/adoption-requests/REPLACE_WITH_REQUEST_ID", "host": ["{{base_url}}"], "path": ["api", "adoption-requests", "REPLACE_WITH_REQUEST_ID"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"approved\",\n  \"notes\": \"Great match, interview scheduled for Monday\"\n}"
+            }
+          }
+        },
+        {
+          "name": "GET /api/shelters/:id",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/api/shelters/{{shelter_id}}", "host": ["{{base_url}}"], "path": ["api", "shelters", "{{shelter_id}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "F2 — Smart Adoption",
+      "item": [
+        {
+          "name": "GET /api/animals/public",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/animals/public",
+              "host": ["{{base_url}}"],
+              "path": ["api", "animals", "public"],
+              "query": [
+                { "key": "species", "value": "dog", "disabled": true },
+                { "key": "size", "value": "medium", "disabled": true },
+                { "key": "energy_level", "value": "low", "disabled": true },
+                { "key": "good_with_kids", "value": "true", "disabled": true },
+                { "key": "shelter_id", "value": "{{shelter_id}}", "disabled": true },
+                { "key": "limit", "value": "20", "disabled": true },
+                { "key": "offset", "value": "0", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/matching",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/matching", "host": ["{{base_url}}"], "path": ["api", "matching"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shelter_id\": \"{{shelter_id}}\",\n  \"family_profile\": {\n    \"living_space\": \"apartment\",\n    \"lifestyle\": \"moderate\",\n    \"experience\": \"some\",\n    \"has_other_pets\": false,\n    \"has_children\": true\n  },\n  \"filters\": {\n    \"species\": \"dog\",\n    \"size\": \"small\"\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "POST /api/adoption-requests",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/adoption-requests", "host": ["{{base_url}}"], "path": ["api", "adoption-requests"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"animal_id\": \"{{animal_id}}\",\n  \"shelter_id\": \"{{shelter_id}}\",\n  \"family_id\": \"REPLACE_WITH_FAMILY_ID\",\n  \"living_space\": \"apartment\",\n  \"lifestyle\": \"moderate\",\n  \"experience\": \"some\",\n  \"has_other_pets\": false,\n  \"has_children\": true\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "F3 — Lost & Found",
+      "item": [
+        {
+          "name": "GET /api/lost-found",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/lost-found",
+              "host": ["{{base_url}}"],
+              "path": ["api", "lost-found"],
+              "query": [
+                { "key": "status", "value": "open", "disabled": true },
+                { "key": "report_type", "value": "lost", "disabled": true },
+                { "key": "lat", "value": "19.4117", "disabled": true },
+                { "key": "lng", "value": "-99.1727", "disabled": true },
+                { "key": "radius_m", "value": "2000", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/lost-found",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/lost-found", "host": ["{{base_url}}"], "path": ["api", "lost-found"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"report_type\": \"lost\",\n  \"pet_name\": \"Max\",\n  \"species\": \"dog\",\n  \"breed\": \"Golden Retriever\",\n  \"color\": \"dorado\",\n  \"description\": \"Perdido cerca del Parque México con collar rojo\",\n  \"photo_urls\": [],\n  \"location\": {\n    \"lat\": 19.4117,\n    \"lng\": -99.1727\n  },\n  \"location_notes\": \"Cerca de Parque México, Condesa\",\n  \"city\": \"Ciudad de México\"\n}"
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/lost-found/:id",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/lost-found/{{report_id}}", "host": ["{{base_url}}"], "path": ["api", "lost-found", "{{report_id}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"resolved\"\n}"
+            }
+          }
+        },
+        {
+          "name": "POST /api/lost-found/alert (N8N internal)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/lost-found/alert", "host": ["{{base_url}}"], "path": ["api", "lost-found", "alert"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"report_id\": \"{{report_id}}\",\n  \"radius_m\": 2000\n}"
+            }
+          }
+        },
+        {
+          "name": "POST /api/vision",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/vision", "host": ["{{base_url}}"], "path": ["api", "vision"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_report_id\": \"{{report_id}}\",\n  \"target_report_id\": \"REPLACE_WITH_TARGET_REPORT_ID\"\n}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
