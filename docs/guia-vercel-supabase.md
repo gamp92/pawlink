@@ -255,6 +255,56 @@ En Pawlink se usan dos remitentes:
 
 ---
 
+## Por qué usar Supabase Edge Functions y no Vercel Functions para las automatizaciones
+
+Esta es una pregunta válida — ambas son serverless y ambas corren TypeScript. La diferencia está en **quién dispara la función y para qué**.
+
+### Vercel Functions
+
+- Se disparan por **requests HTTP** — alguien llama a `/api/algo`
+- Límite de **10 segundos**
+- Diseñadas para responder al usuario en tiempo real (queries, matchmaking, vision)
+- No tienen acceso directo a eventos de la base de datos
+
+### Supabase Edge Functions
+
+- Se disparan por **Database Webhooks** — un evento en la base de datos (INSERT, UPDATE)
+- Límite de **150 segundos**
+- Diseñadas para workflows async que nadie está esperando
+- Corren en la misma infraestructura que Supabase — acceso directo a la DB sin latencia extra
+
+### El problema concreto
+
+Si usaras una Vercel Function para el geo-alert:
+
+```
+INSERT en lost_found_reports
+  → Supabase Webhook → POST a Vercel Function /api/geo-alert
+  → Vercel Function llama a Supabase (query PostGIS)
+  → Vercel Function llama a Resend (emails)
+  → Tiene 10 segundos para hacer todo esto
+```
+
+Si hay 50 usuarios cercanos, mandar 50 emails en 10 segundos es arriesgado. Vercel cortaría la función a mitad del proceso y los emails se enviarían a medias o no se enviarían.
+
+Con Supabase Edge Function tienes 150 segundos y corres más cerca de la base de datos, lo que reduce la latencia de las queries PostGIS.
+
+### Resumen de cuándo usar cada una
+
+| Situación | Usar |
+|---|---|
+| El usuario hace una acción y espera una respuesta | Vercel Function |
+| Un evento en la DB dispara lógica async | Supabase Edge Function |
+| Necesitas más de 10 segundos | Supabase Edge Function |
+| Llamas a APIs externas en respuesta a un evento de DB | Supabase Edge Function |
+| Query rápida o matching con IA | Vercel Function |
+
+En Pawlink la división es clara:
+- `/api/matching`, `/api/vision`, `/api/rag` → Vercel (respuesta en tiempo real al usuario)
+- `social-post`, `geo-alert`, `adoption-confirmation` → Supabase Edge (disparados por la DB, nadie espera la respuesta)
+
+---
+
 ## Por qué se reemplazó N8N
 
 N8N Cloud tiene trial de 14 días. El Demo Day de Pawlink es 39 días después de la configuración inicial — el trial expiraría antes del demo.
