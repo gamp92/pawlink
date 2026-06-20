@@ -3,7 +3,7 @@ import { createServerClient } from '@/lib/supabase/server'
 
 // PATCH /api/adoption-requests/:id
 // Updates status of an adoption request
-// Side effect (approved): N8N sends confirmation email to family
+// Side effect (approved): Supabase Database Webhook triggers adoption-confirmation Edge Function
 // Contract: docs/api-contracts/f1-shelter-hub.md
 export async function PATCH(
   request: Request,

@@ -124,7 +124,6 @@ Calls Groq API with family profile + animal list → returns scores and reasons.
 
 ### POST /api/adoption-requests
 Submits an adoption request from a family to a shelter.
-Triggers N8N to send notification email to the shelter.
 
 **Auth:** Required — family must be logged in with Supabase Auth.
 
@@ -162,7 +161,7 @@ Triggers N8N to send notification email to the shelter.
 }
 ```
 
-**Side effect:** N8N sends email to shelter with family profile and compatibility results.
+**Side effect:** None — the shelter sees the new request in their dashboard (F1 adoption requests list).
 
 **Error 409:**
 ```json

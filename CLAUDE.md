@@ -26,13 +26,13 @@ Auth         Supabase Auth — shelter users have a role, public users are anony
 
 Storage      Supabase Storage — pet photos in `pets` bucket, shelter docs in `documents` bucket
 
-AI           Groq API with Llama 3 8B — called from Vercel Functions and N8N
+AI           Groq API with Llama 3 8B — called from Vercel Functions and Supabase Edge Functions
 
 RAG          LangChain LCEL + sentence-transformers (all-MiniLM-L6-v2) + pgvector
 
 Vision       AWS Rekognition — called from /api/vision Vercel Function
 
-Automation   N8N Cloud — webhooks from Supabase trigger workflows
+Automation   Supabase Database Webhooks → Supabase Edge Functions (Deno) → Resend email API
 
 Hosting      Vercel — frontend + all /api/* serverless functions
 ```
@@ -51,8 +51,7 @@ Every table that belongs to a shelter has a `shelter_id` column. Row Level Secur
 Everything runs serverless. No Express servers, no FastAPI, no Docker. Backend logic lives in:
 
 - `/api/*` — Vercel Functions (10s limit, for queries and real-time operations)
-- Supabase Edge Functions (150s limit, for document ingestion only)
-- N8N — for async workflows triggered by database events
+- Supabase Edge Functions (150s limit, for async workflows triggered by Database Webhooks)
 
 If a task seems to need a long-running process, ask before creating one.
 
@@ -110,15 +109,20 @@ Key constraint: the RAG assistant **ONLY** answers from the shelter's own docume
 
 ---
 
-## N8N workflows
+## Edge Function workflows
 
-Three workflows, all triggered by Supabase webhooks:
+Three async workflows, all triggered by Supabase Database Webhooks → Supabase Edge Functions (Deno) → Resend:
 
-| Workflow | Trigger | What it does |
+| Edge Function | Trigger | What it does |
 |---|---|---|
-| Social post generation | New row in `animals` table | Calls Groq → generates Instagram/Facebook post → saves to `animals.social_post` |
-| Geo-alert | New row in `lost_found_reports` | PostGIS radius query → N8N sends email to nearby registered users |
-| Adoption confirmation | `adoption_requests.status` → `approved` | N8N sends confirmation email to family |
+| `social-post` | INSERT into `animals` | Calls Groq → generates Spanish Instagram/Facebook post → saves to `animals.social_post` |
+| `geo-alert` | INSERT into `lost_found_reports` | PostGIS radius query → sends email alerts to users within 2km via Resend |
+| `adoption-confirmation` | UPDATE `adoption_requests` where status → `approved` | Sends confirmation email to family via Resend |
+
+Code lives in `supabase/functions/<name>/index.ts`. After editing, deploy manually:
+```bash
+supabase functions deploy <function-name>
+```
 
 ---
 
