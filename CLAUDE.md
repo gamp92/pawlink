@@ -62,6 +62,13 @@ If a task seems to need a long-running process, ask before creating one.
 **5. Environment variables**
 Never hardcode keys. Always use the env vars defined in `.env.example`. On Vercel, these are injected automatically.
 
+**6. Edge Functions are NOT auto-deployed**
+Code in `supabase/functions/` is versioned in this repo but does NOT sync automatically with Supabase. After editing any Edge Function you must deploy it manually:
+```bash
+supabase functions deploy <function-name>
+```
+Vercel auto-deploys on push to main. Supabase Edge Functions do not — they require an explicit deploy step.
+
 ---
 
 ## RAG pipeline — how it works
