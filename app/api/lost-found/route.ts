@@ -1,87 +1,109 @@
 import { NextResponse } from 'next/server'
+import { createServerClient } from '@/lib/supabase/server'
 
 // GET /api/lost-found
-// Returns open lost/found reports for the map
+// Returns lost/found reports — supports radius filter via PostGIS
 // Contract: docs/api-contracts/f3-lost-found.md
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
-  const report_type = searchParams.get('report_type')
   const status = searchParams.get('status') ?? 'open'
+  const report_type = searchParams.get('report_type')
+  const lat = searchParams.get('lat')
+  const lng = searchParams.get('lng')
+  const radius_m = searchParams.get('radius_m') ?? '5000'
+  const limit = parseInt(searchParams.get('limit') ?? '50')
 
-  // TODO: replace with real Supabase query — add PostGIS radius filter when lat/lng provided
-  return NextResponse.json({
-    reports: [
-      {
-        id: "rpt-0001",
-        report_type: "lost",
-        pet_name: "Max",
-        species: "dog",
-        breed: "Golden Retriever",
-        color: "golden",
-        description: "Last seen near Parque México wearing a red collar",
-        photo_urls: ["https://images.unsplash.com/photo-1552053831-71594a27632d?w=400"],
-        location: { lat: 19.4126, lng: -99.1740 },
-        location_notes: "Near Parque México, Condesa",
-        city: "CDMX",
-        status: "open",
-        matched_report_id: "rpt-0002",
-        match_confidence: 89.3,
-        created_at: "2025-06-09T00:00:00Z"
-      },
-      {
-        id: "rpt-0002",
-        report_type: "found",
-        pet_name: null,
-        species: "dog",
-        breed: "Golden mix",
-        color: "golden",
-        description: "Found near Insurgentes, friendly and healthy",
-        photo_urls: ["https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=400"],
-        location: { lat: 19.4150, lng: -99.1720 },
-        location_notes: "Av. Insurgentes Sur, Roma Norte",
-        city: "CDMX",
-        status: "open",
-        matched_report_id: "rpt-0001",
-        match_confidence: 89.3,
-        created_at: "2025-06-09T02:00:00Z"
-      },
-      {
-        id: "rpt-0003",
-        report_type: "lost",
-        pet_name: "Coco",
-        species: "cat",
-        breed: "Orange tabby",
-        color: "orange",
-        description: "Missing since Tuesday, very friendly",
-        photo_urls: ["https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=400"],
-        location: { lat: 19.4180, lng: -99.1760 },
-        location_notes: "Colonia Condesa",
-        city: "CDMX",
-        status: "open",
-        matched_report_id: null,
-        match_confidence: null,
-        created_at: "2025-06-08T00:00:00Z"
-      }
-    ],
-    total: 3
-  }, { status: 200 })
+  const supabase = createServerClient()
+
+  // If lat/lng provided, use PostGIS radius filter via RPC
+  if (lat && lng) {
+    const { data, error } = await supabase.rpc('get_reports_near_point', {
+      lat: parseFloat(lat),
+      lng: parseFloat(lng),
+      radius_m: parseFloat(radius_m),
+      filter_status: status,
+      filter_type: report_type,
+      result_limit: limit,
+    })
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ reports: data ?? [], total: data?.length ?? 0 }, { status: 200 })
+  }
+
+  // No geo filter — return all matching reports
+  let query = supabase
+    .from('lost_found_reports')
+    .select('id, report_type, pet_name, species, breed, color, description, photo_urls, location, location_notes, city, status, matched_report_id, match_confidence, created_at')
+    .eq('status', status)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (report_type) query = query.eq('report_type', report_type)
+
+  const { data, error, count } = await query
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  // PostGIS returns location as WKB — parse to {lat, lng}
+  const reports = (data ?? []).map((r: any) => ({
+    ...r,
+    location: parseLocation(r.location),
+  }))
+
+  return NextResponse.json({ reports, total: count ?? reports.length }, { status: 200 })
 }
 
 // POST /api/lost-found
-// Submits a new lost or found report
+// Creates a new report — N8N geo-alert fires automatically via Supabase trigger
 // Contract: docs/api-contracts/f3-lost-found.md
 export async function POST(request: Request) {
   const body = await request.json()
+  const { report_type, species, location, ...rest } = body
 
-  // TODO: replace with real Supabase insert
-  // Side effects (when real): N8N geo-alert + /api/vision auto-called
-  return NextResponse.json({
-    report: {
-      id: "rpt-" + Math.random().toString(36).substr(2, 6),
-      report_type: body.report_type,
-      status: "open",
-      created_at: new Date().toISOString()
-    },
-    message: "Report submitted. Nearby users will be alerted automatically."
-  }, { status: 201 })
+  if (!report_type || !species || !location?.lat || !location?.lng) {
+    return NextResponse.json(
+      { error: 'report_type, species and location (lat, lng) are required' },
+      { status: 400 }
+    )
+  }
+
+  if (!['lost', 'found'].includes(report_type)) {
+    return NextResponse.json({ error: "report_type must be 'lost' or 'found'" }, { status: 400 })
+  }
+
+  const supabase = createServerClient()
+
+  const { data, error } = await supabase
+    .from('lost_found_reports')
+    .insert({
+      report_type,
+      species,
+      location: `POINT(${location.lng} ${location.lat})`,
+      ...rest,
+    })
+    .select('id, report_type, status, created_at')
+    .single()
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json(
+    { report: data, message: 'Report submitted. Nearby users will be alerted automatically.' },
+    { status: 201 }
+  )
+}
+
+function parseLocation(location: any): { lat: number; lng: number } | null {
+  if (!location) return null
+  // Supabase returns geography as GeoJSON when using .select()
+  if (location.coordinates) {
+    return { lat: location.coordinates[1], lng: location.coordinates[0] }
+  }
+  return location
 }
