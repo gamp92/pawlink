@@ -47,7 +47,11 @@ export async function GET(request: Request) {
   return NextResponse.json({ requests }, { status: 200 })
 }
 
-// POST /api/adoption-requests — F2, contract: docs/api-contracts/f2-smart-adoption.md
+// POST /api/adoption-requests
+// Submits an adoption request from a family to a shelter.
+// Note: originally N8N was supposed to notify the shelter by email on new requests.
+// That workflow was never implemented — the shelter sees new requests in their dashboard (F1).
+// Contract: docs/api-contracts/f2-smart-adoption.md
 export async function POST(request: Request) {
   const body = await request.json()
   const { animal_id, shelter_id, family_id, living_space, lifestyle, experience, has_other_pets, has_children } = body

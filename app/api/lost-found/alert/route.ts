@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 
 // POST /api/lost-found/alert
-// Internal endpoint — queries PostGIS for users near a report
-// Calls get_users_near_report() and returns the list (used for testing; geo-alert Edge Function handles this automatically)
+// Debug endpoint — originally built for N8N (which needed an HTTP endpoint to query PostGIS).
+// N8N was replaced by the geo-alert Edge Function, which calls get_users_near_report() directly.
+// This endpoint is now only useful for manually verifying that PostGIS returns the correct
+// nearby users for a given report (e.g. testing seed users test+near vs test+far from Postman).
+// It does NOT send emails — that is handled entirely by the geo-alert Edge Function.
 // Contract: docs/api-contracts/f3-lost-found.md
 export async function POST(request: Request) {
   const body = await request.json()
