@@ -31,7 +31,7 @@ AI           Groq API · Llama 3 8B · LangChain LCEL · sentence-transformers
 
 Vision       AWS Rekognition
 
-Automation   N8N Cloud
+Automation   Supabase Database Webhooks → Edge Functions (Deno) → Resend
 
 Hosting      Vercel
 
@@ -49,13 +49,13 @@ User (browser) → Vercel (Next.js + /api/rag + /api/vision + /api/matching)
 
                  Supabase (DB + Auth + Storage + Edge Functions)
 
-                      ↓ webhooks
+                      ↓ Database Webhooks
 
-                 N8N (automations → Groq + email alerts)
+                 Supabase Edge Functions (social-post · geo-alert · adoption-confirmation)
 
                       ↓
 
-                 Groq API (LLM) + AWS Rekognition (vision)
+                 Groq API (LLM) + Resend (email) + AWS Rekognition (vision)
 ```
 
 Key design decisions:
@@ -74,7 +74,7 @@ Key design decisions:
 - A Supabase project with PostGIS and pgvector enabled
 - Groq API key (free at console.groq.com)
 - AWS account with Rekognition access
-- N8N Cloud account
+- Resend account (free tier: 3,000 emails/month)
 
 ### Steps
 
@@ -217,7 +217,7 @@ Rule: No direct pushes to `main`. All changes via PR.
 | Name | Role | Responsibilities |
 |---|---|---|
 | Jose Montero | Frontend Engineer | UI generation, Leaflet map, animations, API integration |
-| Gabriel Paez | Backend Engineer | RAG pipeline, vision matching, PostGIS, N8N, seed data |
+| Gabriel Paez | Backend Engineer | RAG pipeline, vision matching, PostGIS, Edge Functions, seed data |
 
 ---
 

@@ -59,7 +59,7 @@ export async function GET(request: Request) {
 }
 
 // POST /api/lost-found
-// Creates a new report — N8N geo-alert fires automatically via Supabase trigger
+// Creates a new report — Supabase Database Webhook triggers geo-alert Edge Function
 // Contract: docs/api-contracts/f3-lost-found.md
 export async function POST(request: Request) {
   const body = await request.json()

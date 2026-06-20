@@ -81,7 +81,7 @@ Creates a new animal. Triggers N8N webhook to generate social post.
 }
 ```
 
-**Side effect:** N8N webhook fires automatically via Supabase trigger → Groq generates social post → saved to `animals.social_post`.
+**Side effect:** Supabase Database Webhook triggers `social-post` Edge Function → Groq generates social post → saved to `animals.social_post`.
 
 ---
 
@@ -163,7 +163,7 @@ Updates the status of an adoption request.
 }
 ```
 
-**Side effect (approved only):** N8N sends confirmation email to family.
+**Side effect (approved only):** Supabase Database Webhook triggers `adoption-confirmation` Edge Function → sends confirmation email to family via Resend.
 
 ---
 

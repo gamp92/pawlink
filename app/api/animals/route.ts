@@ -35,7 +35,7 @@ export async function GET(request: Request) {
 }
 
 // POST /api/animals
-// Creates a new animal — N8N webhook fires automatically via Supabase trigger
+// Creates a new animal — Supabase Database Webhook triggers social-post Edge Function
 // Contract: docs/api-contracts/f1-shelter-hub.md
 export async function POST(request: Request) {
   const body = await request.json()

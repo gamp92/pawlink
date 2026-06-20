@@ -93,7 +93,7 @@ Triggers two side effects: geo-alert to nearby users and vision matching.
 ```
 
 **Side effects on creation:**
-1. N8N webhook fires → calls `get_users_near_report()` PostGIS function → sends email alerts to users within 2km
+1. Supabase Database Webhook triggers `geo-alert` Edge Function → calls `get_users_near_report()` PostGIS function → sends email alerts to users within 2km via Resend
 2. `/api/vision` is called automatically to compare against existing open reports
 
 ---
@@ -166,11 +166,11 @@ Called automatically when a new report is created, but can also be called manual
 
 ---
 
-## Geo-alerts (internal — called by N8N)
+## Geo-alerts (internal — for testing)
 
 ### POST /api/lost-found/alert
-Internal endpoint called by N8N after a new report is created.
-Queries PostGIS for nearby users and returns the list for N8N to email.
+Internal endpoint for querying nearby users around a report.
+The `geo-alert` Edge Function handles this automatically on report creation; this endpoint is useful for manual testing.
 
 **Request body:**
 ```json
@@ -194,4 +194,4 @@ Queries PostGIS for nearby users and returns the list for N8N to email.
 **Notes:**
 - Calls `get_users_near_report()` PostgreSQL function defined in schema.sql
 - The reporter is excluded from the alert list automatically
-- N8N receives this list and sends the emails
+- The `geo-alert` Edge Function handles emailing automatically — this endpoint only returns the user list
