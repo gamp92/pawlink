@@ -161,7 +161,7 @@ Submits an adoption request from a family to a shelter.
 }
 ```
 
-**Side effect:** None — the shelter sees the new request in their dashboard (F1 adoption requests list).
+**Side effect:** None — the shelter sees the new request in their F1 dashboard (`GET /api/adoption-requests`). Email notification to the shelter was originally planned via N8N but was not implemented.
 
 **Error 409:**
 ```json
