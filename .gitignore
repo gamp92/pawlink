@@ -147,5 +147,6 @@ __pycache__/
 *.pyc
 .venv/
 
-# generated HTML (intermediate files for PDF export)
+# generated files (PDF exports and intermediate HTML)
 docs/*.html
+docs/*.pdf
