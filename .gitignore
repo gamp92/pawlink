@@ -150,3 +150,6 @@ __pycache__/
 # generated files (PDF exports and intermediate HTML)
 docs/*.html
 docs/*.pdf
+
+# local checklist (not for git)
+docs/checklist.md
