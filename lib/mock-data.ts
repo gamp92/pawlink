@@ -29,6 +29,7 @@ export type Animal = {
 export type AdoptionRequest = {
   id: string
   status: 'pending' | 'seen' | 'approved' | 'rejected'
+  notes?: string
   compatibility_score: number
   compatibility_reasons: string[]
   animal: Pick<Animal, 'id' | 'name' | 'photo_urls'>
@@ -40,6 +41,22 @@ export type AdoptionRequest = {
     has_other_pets: boolean
   }
   created_at: string
+}
+
+export type ShelterDocument = {
+  id: string
+  file_name: string
+  status: 'ready' | 'processing' | 'failed'
+  chunk_count: number | null
+  created_at: string
+}
+
+export type ShelterActivity = {
+  id: string
+  title: string
+  description: string
+  time: string
+  tone: 'purple' | 'teal' | 'amber' | 'green' | 'slate'
 }
 
 export type LostFoundReport = {
@@ -168,6 +185,25 @@ export const animals: Animal[] = [
     shelter: { id: shelterProfile.id, name: shelterProfile.name, city: shelterProfile.city },
     created_at: '2025-06-12T00:00:00Z',
   },
+  {
+    id: 'animal-sol',
+    name: 'Sol',
+    species: 'dog',
+    breed: 'Terrier mix',
+    age_years: 5,
+    size: 'small',
+    gender: 'female',
+    status: 'adopted',
+    color: 'white',
+    description: 'Patient senior companion adopted after a long foster stay.',
+    energy_level: 'low',
+    good_with_kids: true,
+    good_with_pets: true,
+    photo_urls: [''],
+    social_post: 'Sol found her family after 5 months with us.',
+    shelter: { id: shelterProfile.id, name: shelterProfile.name, city: shelterProfile.city },
+    created_at: '2025-06-08T00:00:00Z',
+  },
 ]
 
 export const adoptionRequests: AdoptionRequest[] = [
@@ -189,6 +225,100 @@ export const adoptionRequests: AdoptionRequest[] = [
       has_other_pets: false,
     },
     created_at: '2025-06-13T00:00:00Z',
+  },
+  {
+    id: 'request-mochi-luis',
+    status: 'pending',
+    compatibility_score: 88,
+    compatibility_reasons: ['Quiet home', 'No other pets', 'Low energy match'],
+    animal: {
+      id: animals[1].id,
+      name: animals[1].name,
+      photo_urls: animals[1].photo_urls,
+    },
+    family: {
+      full_name: 'Luis Fernandez',
+      email: 'luis@example.com',
+      living_space: 'apartment',
+      has_children: false,
+      has_other_pets: false,
+    },
+    created_at: '2025-06-12T19:00:00Z',
+  },
+  {
+    id: 'request-bruno-maria',
+    status: 'seen',
+    notes: 'Needs a yard or daily long walks.',
+    compatibility_score: 72,
+    compatibility_reasons: ['Active adopter', 'Pet experience', 'Can handle large dogs'],
+    animal: {
+      id: animals[2].id,
+      name: animals[2].name,
+      photo_urls: animals[2].photo_urls,
+    },
+    family: {
+      full_name: 'Maria Torres',
+      email: 'maria@example.com',
+      living_space: 'house_yard',
+      has_children: false,
+      has_other_pets: true,
+    },
+    created_at: '2025-06-11T15:00:00Z',
+  },
+]
+
+export const shelterDocuments: ShelterDocument[] = [
+  {
+    id: 'doc-policy',
+    file_name: 'politicas_adopcion.pdf',
+    status: 'ready',
+    chunk_count: 12,
+    created_at: '2025-06-09T00:00:00Z',
+  },
+  {
+    id: 'doc-requirements',
+    file_name: 'requisitos_familias.pdf',
+    status: 'processing',
+    chunk_count: null,
+    created_at: '2025-06-13T10:00:00Z',
+  },
+  {
+    id: 'doc-health',
+    file_name: 'protocolo_vacunacion.pdf',
+    status: 'ready',
+    chunk_count: 8,
+    created_at: '2025-06-08T00:00:00Z',
+  },
+]
+
+export const shelterActivities: ShelterActivity[] = [
+  {
+    id: 'activity-request',
+    title: 'New adoption request',
+    description: 'Ana Garcia requested to meet Luna.',
+    time: '12 min ago',
+    tone: 'purple',
+  },
+  {
+    id: 'activity-post',
+    title: 'Social post ready',
+    description: 'Bruno has a generated adoption post ready to review.',
+    time: '43 min ago',
+    tone: 'teal',
+  },
+  {
+    id: 'activity-doc',
+    title: 'Document processing',
+    description: 'requisitos_familias.pdf is being prepared for shelter assistant answers.',
+    time: '2h ago',
+    tone: 'amber',
+  },
+  {
+    id: 'activity-adoption',
+    title: 'Successful adoption',
+    description: 'Sol was marked as adopted.',
+    time: 'Yesterday',
+    tone: 'green',
   },
 ]
 
