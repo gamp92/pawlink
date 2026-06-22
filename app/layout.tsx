@@ -54,6 +54,7 @@ button { border: 0; cursor: default; font: inherit; }
 .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.5rem; }
 .space-y-3 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.75rem; }
 .max-w-7xl { max-width: 80rem; }
+.max-w-\[520px\] { max-width: 520px; }
 .max-w-\[82\%\] { max-width: 82%; }
 .min-w-0 { min-width: 0; }
 .w-5 { width: 1.25rem; }
@@ -73,6 +74,7 @@ button { border: 0; cursor: default; font: inherit; }
 .min-h-\[255px\] { min-height: 255px; }
 .relative { position: relative; }
 .absolute { position: absolute; }
+.fixed { position: fixed; }
 .inset-0 { inset: 0; }
 .left-\[18\%\] { left: 18%; }
 .left-\[22\%\] { left: 22%; }
@@ -116,6 +118,7 @@ button { border: 0; cursor: default; font: inherit; }
 .bg-amber-50 { background-color: #fffbeb; }
 .bg-emerald-50 { background-color: #ecfdf5; }
 .bg-slate-800 { background-color: #1e293b; }
+.bg-slate-950\/40 { background-color: rgba(2, 6, 23, 0.4); }
 .bg-gradient-to-br { background-image: linear-gradient(to bottom right, var(--tw-gradient-from, #f5f3ff), var(--tw-gradient-to, #f0fdfa)); }
 .from-violet-50 { --tw-gradient-from: #f5f3ff; }
 .to-teal-50 { --tw-gradient-to: #f0fdfa; }
