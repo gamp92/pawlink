@@ -42,8 +42,8 @@ Actualizado: 2026-07-03
 - [x] `POST /api/adoption-requests` — crea solicitud de adopción
 - [x] `PATCH /api/adoption-requests/[id]` — cambia status (aprueba/rechaza)
 - [x] `GET /api/shelters/[id]` — perfil público del shelter con stats
-- [ ] `POST /api/upload` — subir foto a Supabase Storage bucket `pets`
-- [ ] Middleware de auth — proteger `/dashboard/*` con sesión de Supabase
+- [ ] `POST /api/upload` — subir foto a Supabase Storage bucket `pets` — ⚠️ bloqueado: no existe contrato en `docs/api-contracts/` (regla: contrato primero). Nota: el contrato F3 asume que el frontend sube fotos directo a Storage; definir con Jose si va endpoint o subida directa
+- [x] Middleware de auth — `/dashboard/*` protegido con sesión de Supabase (2026-07-03). Sin sesión → redirect a `/login?redirect=<ruta>`. ⚠️ Falta que el frontend cree la página `/login`
 - [x] RLS policies — verificadas via `pg_policies` 2026-07-02 (12 policies en 5 tablas, coinciden con schema.sql)
 - [ ] Testing con datos reales del seed
 
