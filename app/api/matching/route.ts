@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
-const GROQ_MODEL = 'llama3-8b-8192'
+const GROQ_MODEL = 'llama-3.1-8b-instant'
 
 // POST /api/matching
 // Receives family profile → fetches available animals → calls Groq once with all animals
