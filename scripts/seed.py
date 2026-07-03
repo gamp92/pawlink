@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
 from supabase import create_client, Client
+from supabase_auth.errors import AuthApiError
 
 load_dotenv()
 
@@ -317,13 +318,22 @@ def seed_animals(shelter_ids: list[str]) -> None:
     print(f"  ✓ 50 animals inserted")
 
 
+def find_auth_user_id(email: str) -> str:
+    users = supabase.auth.admin.list_users(per_page=1000)
+    return next(u.id for u in users if u.email == email)
+
+
 def create_auth_user(email: str, password: str = "Pawlink2025!") -> str:
-    result = supabase.auth.admin.create_user({
-        "email": email,
-        "password": password,
-        "email_confirm": True,
-    })
-    return result.user.id
+    try:
+        result = supabase.auth.admin.create_user({
+            "email": email,
+            "password": password,
+            "email_confirm": True,
+        })
+        return result.user.id
+    except AuthApiError:
+        # User left over from a previous seed run — reuse it
+        return find_auth_user_id(email)
 
 
 def seed_family_profiles(shelter_ids: list[str]) -> None:
