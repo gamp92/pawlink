@@ -1,7 +1,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
-const GROQ_MODEL = 'llama3-8b-8192'
+const GROQ_MODEL = 'llama-3.1-8b-instant'
 
 // Triggered by Supabase Database Webhook on INSERT into animals table
 // Generates a social media post via Groq and saves it to animals.social_post

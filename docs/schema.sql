@@ -293,9 +293,13 @@ as $$
   join auth.users au
     on au.id = fp.user_id
   where r.id = report_id
-  and fp.user_id != r.reporter_id   -- don't alert the person who reported
+  and fp.user_id is distinct from r.reporter_id   -- don't alert the reporter (NULL-safe: reporter_id is null for anonymous reports)
   order by distance_m asc;
 $$;
+
+-- Edge Functions call get_users_near_report via PostgREST as service_role,
+-- which lacks SELECT on auth schema tables by default (error 42501).
+grant select on auth.users to service_role;
 
 
 -- ============================================================
