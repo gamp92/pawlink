@@ -1,0 +1,666 @@
+openapi: 3.0.3
+info:
+  title: Pawlink API
+  version: 1.0.0
+  description: |
+    API backend de Pawlink — plataforma B2B SaaS para refugios de animales en LATAM.
+
+    - **F1 Shelter Hub**: gestión de animales y solicitudes de adopción (privado, shelter)
+    - **F2 Smart Adoption**: galería pública + matching de compatibilidad con IA (Groq)
+    - **F3 Lost & Found**: reportes de mascotas perdidas/encontradas, geo-alertas (PostGIS) y matching por visión (AWS Rekognition)
+
+    Nota: los endpoints aún no validan sesión (MVP). El contrato F1 exige auth de shelter — pendiente.
+servers:
+  - url: https://pawlink-theta.vercel.app
+    description: Producción (Vercel)
+  - url: http://localhost:3000
+    description: Desarrollo local
+
+tags:
+  - name: Animals (F1)
+    description: Inventario de animales del shelter
+  - name: Adoption Requests (F1/F2)
+    description: Solicitudes de adopción
+  - name: Shelters
+    description: Perfil público del shelter
+  - name: Public Gallery (F2)
+    description: Galería pública y matching con IA
+  - name: Lost & Found (F3)
+    description: Reportes, geo-alertas y visión
+
+paths:
+  /api/animals:
+    get:
+      tags: [Animals (F1)]
+      summary: Lista los animales de un shelter
+      parameters:
+        - { name: shelter_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { type: string, enum: [available, in_process, adopted] } }
+        - { name: species, in: query, schema: { type: string, enum: [dog, cat, other] } }
+      responses:
+        '200':
+          description: Lista de animales (orden created_at desc)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  animals:
+                    type: array
+                    items: { $ref: '#/components/schemas/Animal' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    post:
+      tags: [Animals (F1)]
+      summary: Crea un animal
+      description: >
+        Side effect: el INSERT dispara un Database Webhook → Edge Function `social-post` →
+        Groq genera un post en español y lo guarda en `animals.social_post` (asíncrono, ~5-10s).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AnimalCreate' }
+      responses:
+        '201':
+          description: Animal creado (social_post llega asíncrono)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  animal:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      name: { type: string }
+                      social_post: { type: string, nullable: true }
+                      status: { type: string }
+                      created_at: { type: string, format: date-time }
+                  message: { type: string, example: Animal created. Social post will be generated shortly. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/animals/{id}:
+    patch:
+      tags: [Animals (F1)]
+      summary: Actualiza un animal (campos parciales)
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Cualquier subconjunto de campos del animal
+              example: { status: in_process, medical_notes: Needs follow-up vaccination }
+      responses:
+        '200':
+          description: Animal actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  animal:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      status: { type: string }
+                      updated_at: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    delete:
+      tags: [Animals (F1)]
+      summary: Elimina un animal
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: Eliminado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: Animal deleted }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/animals/public:
+    get:
+      tags: [Public Gallery (F2)]
+      summary: Galería pública de animales disponibles (todos los shelters)
+      parameters:
+        - { name: species, in: query, schema: { type: string, enum: [dog, cat, other] } }
+        - { name: size, in: query, schema: { type: string, enum: [small, medium, large] } }
+        - { name: energy_level, in: query, schema: { type: string, enum: [low, medium, high] } }
+        - { name: good_with_kids, in: query, schema: { type: string, enum: ['true', 'false'] } }
+        - { name: good_with_pets, in: query, schema: { type: string, enum: ['true', 'false'] } }
+        - { name: shelter_id, in: query, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, schema: { type: integer, default: 20 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200':
+          description: Animales disponibles con datos del shelter
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  animals:
+                    type: array
+                    items: { $ref: '#/components/schemas/PublicAnimal' }
+                  total: { type: integer, description: Total sin paginar }
+                  limit: { type: integer }
+                  offset: { type: integer }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/matching:
+    post:
+      tags: [Public Gallery (F2)]
+      summary: Matching de compatibilidad familia-animal con IA (Groq)
+      description: >
+        Toma el perfil de la familia, busca hasta 30 animales disponibles y le pide a Groq
+        (llama-3.1-8b-instant) un score 0-100 con razones por animal. Devuelve ordenado desc.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [family_profile]
+              properties:
+                shelter_id: { type: string, format: uuid, description: Limitar a un shelter (opcional) }
+                family_profile: { $ref: '#/components/schemas/FamilyProfile' }
+                filters:
+                  type: object
+                  properties:
+                    species: { type: string, enum: [dog, cat, other] }
+                    size: { type: string, enum: [small, medium, large] }
+      responses:
+        '200':
+          description: Animales rankeados por compatibilidad
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        animal: { $ref: '#/components/schemas/MatchedAnimal' }
+                        compatibility_score: { type: number, example: 94.5 }
+                        compatibility_reasons:
+                          type: array
+                          items: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '502': { description: Error de Groq o respuesta no parseable, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '503': { description: GROQ_API_KEY no configurada, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/adoption-requests:
+    get:
+      tags: [Adoption Requests (F1/F2)]
+      summary: Lista las solicitudes de adopción de un shelter
+      parameters:
+        - { name: shelter_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { type: string, enum: [pending, seen, approved, rejected] } }
+      responses:
+        '200':
+          description: Solicitudes con datos del animal y la familia
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requests:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdoptionRequest' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    post:
+      tags: [Adoption Requests (F1/F2)]
+      summary: Crea una solicitud de adopción (familia → shelter)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [animal_id, shelter_id, family_id]
+              properties:
+                animal_id: { type: string, format: uuid }
+                shelter_id: { type: string, format: uuid }
+                family_id: { type: string, format: uuid }
+                living_space: { type: string, enum: [apartment, house_no_yard, house_yard] }
+                lifestyle: { type: string, enum: [sedentary, moderate, active] }
+                experience: { type: string, enum: [none, some, experienced] }
+                has_other_pets: { type: boolean }
+                has_children: { type: boolean }
+      responses:
+        '201':
+          description: Solicitud creada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      status: { type: string, example: pending }
+                      animal_id: { type: string, format: uuid }
+                      shelter_id: { type: string, format: uuid }
+                      created_at: { type: string, format: date-time }
+                  message: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/adoption-requests/{id}:
+    patch:
+      tags: [Adoption Requests (F1/F2)]
+      summary: Cambia el status de una solicitud (aprueba/rechaza)
+      description: >
+        Side effect: al pasar a `approved`, un Database Webhook dispara la Edge Function
+        `adoption-confirmation` → email de confirmación a la familia via Resend.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string, enum: [pending, seen, approved, rejected] }
+                notes: { type: string }
+      responses:
+        '200':
+          description: Solicitud actualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      status: { type: string }
+                      updated_at: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/shelters/{id}:
+    get:
+      tags: [Shelters]
+      summary: Perfil público de un shelter con stats
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: Perfil + stats calculadas del inventario
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  shelter: { $ref: '#/components/schemas/Shelter' }
+        '404': { description: Shelter no encontrado, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/lost-found:
+    get:
+      tags: [Lost & Found (F3)]
+      summary: Lista reportes de mascotas perdidas/encontradas
+      description: Con `lat` y `lng` aplica filtro de radio PostGIS (RPC get_reports_near_point).
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [open, resolved], default: open } }
+        - { name: report_type, in: query, schema: { type: string, enum: [lost, found] } }
+        - { name: lat, in: query, schema: { type: number, example: 19.4117 } }
+        - { name: lng, in: query, schema: { type: number, example: -99.1727 } }
+        - { name: radius_m, in: query, schema: { type: number, default: 5000 } }
+        - { name: limit, in: query, schema: { type: integer, default: 50 } }
+      responses:
+        '200':
+          description: Reportes (location como {lat, lng})
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reports:
+                    type: array
+                    items: { $ref: '#/components/schemas/Report' }
+                  total: { type: integer }
+        '500': { $ref: '#/components/responses/ServerError' }
+    post:
+      tags: [Lost & Found (F3)]
+      summary: Crea un reporte de mascota perdida/encontrada
+      description: >
+        Side effect: el INSERT dispara un Database Webhook → Edge Function `geo-alert` →
+        emails via Resend a usuarios registrados en un radio de 2 km.
+        Las fotos deben subirse a Storage antes; aquí solo van las URLs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [report_type, species, location]
+              properties:
+                report_type: { type: string, enum: [lost, found] }
+                species: { type: string, enum: [dog, cat, other] }
+                location:
+                  type: object
+                  required: [lat, lng]
+                  properties:
+                    lat: { type: number, example: 19.4117 }
+                    lng: { type: number, example: -99.1727 }
+                pet_name: { type: string, nullable: true, description: null si es found (desconocido) }
+                breed: { type: string }
+                color: { type: string }
+                description: { type: string }
+                photo_urls: { type: array, items: { type: string, format: uri } }
+                location_notes: { type: string, example: Cerca de Parque México }
+                city: { type: string }
+      responses:
+        '201':
+          description: Reporte creado (geo-alertas salen asíncronas)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  report:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      report_type: { type: string }
+                      status: { type: string, example: open }
+                      created_at: { type: string, format: date-time }
+                  message: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/lost-found/{id}:
+    patch:
+      tags: [Lost & Found (F3)]
+      summary: Actualiza un reporte (típicamente cerrarlo)
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string, enum: [open, resolved] }
+      responses:
+        '200':
+          description: Reporte actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  report:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      status: { type: string }
+                      updated_at: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/lost-found/alert:
+    post:
+      tags: [Lost & Found (F3)]
+      summary: 'Debug: usuarios cercanos a un reporte (NO envía emails)'
+      description: >
+        Endpoint de testing — verifica qué usuarios devuelve PostGIS para un reporte
+        (ej. validar test+near vs test+far). El envío real de emails lo hace la Edge Function geo-alert.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [report_id]
+              properties:
+                report_id: { type: string, format: uuid }
+                radius_m: { type: number, default: 2000 }
+      responses:
+        '200':
+          description: Usuarios dentro del radio, ordenados por distancia
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alerted_users:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        user_id: { type: string, format: uuid }
+                        email: { type: string, format: email }
+                        distance_m: { type: number, example: 398.5 }
+                  total: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/vision:
+    post:
+      tags: [Lost & Found (F3)]
+      summary: Compara fotos de dos reportes con AWS Rekognition
+      description: >
+        Si la confianza es >= 75, marca ambos reportes como match (matched_report_id + match_confidence).
+        Requiere credenciales AWS configuradas en el servidor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source_report_id, target_report_id]
+              properties:
+                source_report_id: { type: string, format: uuid }
+                target_report_id: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Resultado de la comparación
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  match:
+                    type: object
+                    properties:
+                      source_report_id: { type: string, format: uuid }
+                      target_report_id: { type: string, format: uuid }
+                      confidence: { type: number, example: 87.3 }
+                      is_match: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { description: Reporte no encontrado o sin foto, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '502': { description: Error de Rekognition, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '503': { description: Credenciales AWS no configuradas, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+components:
+  responses:
+    BadRequest:
+      description: Parámetros faltantes o inválidos
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ServerError:
+      description: Error interno (mensaje de Supabase)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string, example: shelter_id is required }
+
+    Animal:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: Luna }
+        species: { type: string, enum: [dog, cat, other] }
+        breed: { type: string, example: Labrador }
+        age_years: { type: number, example: 2.5 }
+        size: { type: string, enum: [small, medium, large] }
+        gender: { type: string, enum: [male, female] }
+        color: { type: string, example: dorado }
+        description: { type: string }
+        energy_level: { type: string, enum: [low, medium, high] }
+        good_with_kids: { type: boolean }
+        good_with_pets: { type: boolean }
+        vaccinated: { type: boolean }
+        sterilized: { type: boolean }
+        medical_notes: { type: string, nullable: true }
+        status: { type: string, enum: [available, in_process, adopted] }
+        photo_urls: { type: array, items: { type: string, format: uri } }
+        social_post: { type: string, nullable: true, description: Post generado por IA (Groq) }
+        created_at: { type: string, format: date-time }
+
+    AnimalCreate:
+      type: object
+      required: [shelter_id, name, species]
+      properties:
+        shelter_id: { type: string, format: uuid }
+        name: { type: string, example: Luna }
+        species: { type: string, enum: [dog, cat, other] }
+        breed: { type: string }
+        age_years: { type: number }
+        size: { type: string, enum: [small, medium, large] }
+        gender: { type: string, enum: [male, female] }
+        color: { type: string }
+        description: { type: string }
+        energy_level: { type: string, enum: [low, medium, high] }
+        good_with_kids: { type: boolean }
+        good_with_pets: { type: boolean }
+        vaccinated: { type: boolean }
+        sterilized: { type: boolean }
+        medical_notes: { type: string }
+        photo_urls: { type: array, items: { type: string, format: uri } }
+
+    PublicAnimal:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        species: { type: string }
+        breed: { type: string }
+        age_years: { type: number }
+        size: { type: string }
+        gender: { type: string }
+        energy_level: { type: string }
+        good_with_kids: { type: boolean }
+        good_with_pets: { type: boolean }
+        photo_urls: { type: array, items: { type: string, format: uri } }
+        shelter:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string, example: Refugio Patitas Felices }
+            city: { type: string, example: Ciudad de México }
+
+    MatchedAnimal:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        species: { type: string }
+        breed: { type: string }
+        age_years: { type: number }
+        photo_urls: { type: array, items: { type: string, format: uri } }
+        shelter:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            city: { type: string }
+
+    FamilyProfile:
+      type: object
+      required: [living_space, lifestyle, experience]
+      properties:
+        living_space: { type: string, enum: [apartment, house_no_yard, house_yard] }
+        lifestyle: { type: string, enum: [sedentary, moderate, active] }
+        experience: { type: string, enum: [none, some, experienced] }
+        has_children: { type: boolean, default: false }
+        has_other_pets: { type: boolean, default: false }
+
+    AdoptionRequest:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [pending, seen, approved, rejected] }
+        compatibility_score: { type: number, nullable: true, example: 94.5 }
+        compatibility_reasons:
+          type: array
+          items: { type: string }
+        notes: { type: string, nullable: true }
+        animal:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            photo_urls: { type: array, items: { type: string, format: uri } }
+        family:
+          type: object
+          properties:
+            full_name: { type: string }
+            email: { type: string, format: email }
+            living_space: { type: string }
+            has_children: { type: boolean }
+            has_other_pets: { type: boolean }
+        created_at: { type: string, format: date-time }
+
+    Shelter:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: Refugio Patitas Felices }
+        description: { type: string }
+        city: { type: string, example: Ciudad de México }
+        address: { type: string }
+        cover_photo: { type: string, format: uri }
+        instagram_url: { type: string, format: uri }
+        website_url: { type: string, format: uri, nullable: true }
+        founded_year: { type: integer, example: 2010 }
+        stats:
+          type: object
+          properties:
+            total_animals: { type: integer, example: 10 }
+            available_animals: { type: integer, example: 7 }
+            total_adoptions: { type: integer, example: 2 }
+
+    Report:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        report_type: { type: string, enum: [lost, found] }
+        pet_name: { type: string, nullable: true, example: Fido }
+        species: { type: string, enum: [dog, cat, other] }
+        breed: { type: string }
+        color: { type: string }
+        description: { type: string }
+        photo_urls: { type: array, items: { type: string, format: uri } }
+        location:
+          type: object
+          nullable: true
+          properties:
+            lat: { type: number, example: 19.4117 }
+            lng: { type: number, example: -99.1727 }
+        location_notes: { type: string, example: Cerca de Parque México }
+        city: { type: string }
+        status: { type: string, enum: [open, resolved] }
+        matched_report_id: { type: string, format: uuid, nullable: true }
+        match_confidence: { type: number, nullable: true }
+        created_at: { type: string, format: date-time }
