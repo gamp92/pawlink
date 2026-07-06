@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { StatusBadge } from '@/components/shared/StatusBadge'
-import { ragMessages, shelterDocuments, shelterProfile } from '@/lib/mock-data'
+import { ragMessages, shelterDocuments, shelterProfile as fallbackShelterProfile, type ShelterProfile } from '@/lib/mock-data'
 
 type ChatMessage = {
   id: string
@@ -16,12 +16,24 @@ type MockAnswer = {
   citation: string
 }
 
+type ApiShelter = ShelterProfile & {
+  address?: string | null
+  website_url?: string | null
+  founded_year?: number | null
+}
+
 const initialMessages: ChatMessage[] = ragMessages.map((message, index) => ({
   id: `seed-${index}`,
   role: message.role === 'user' ? 'user' : 'assistant',
   text: message.text,
   citation: 'citation' in message ? message.citation : undefined,
 }))
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function isUuid(value: string) {
+  return uuidPattern.test(value)
+}
 
 function getMockAnswer(question: string): MockAnswer {
   const normalizedQuestion = question.toLowerCase()
@@ -67,10 +79,75 @@ function getMockAnswer(question: string): MockAnswer {
   }
 }
 
-export function ShelterAssistant() {
+type ShelterAssistantProps = {
+  shelterId: string
+}
+
+export function ShelterAssistant({ shelterId }: ShelterAssistantProps) {
+  const [profile, setProfile] = useState<ShelterProfile>(fallbackShelterProfile)
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true)
+  const [profileError, setProfileError] = useState<string | null>(null)
+  const [isUsingFallbackProfile, setIsUsingFallbackProfile] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [question, setQuestion] = useState('')
   const [isTyping, setIsTyping] = useState(false)
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadShelterProfile() {
+      if (!isUuid(shelterId)) {
+        setProfile(fallbackShelterProfile)
+        setIsUsingFallbackProfile(true)
+        setProfileError('This shelter link uses a mock id. Showing fallback profile.')
+        setIsLoadingProfile(false)
+        return
+      }
+
+      try {
+        const response = await fetch(`/api/shelters/${shelterId}`, { cache: 'no-store' })
+        if (!response.ok) {
+          throw new Error('Could not load shelter profile')
+        }
+
+        const payload = (await response.json()) as { shelter?: ApiShelter }
+
+        if (!isMounted) return
+
+        if (!payload.shelter) {
+          setProfile(fallbackShelterProfile)
+          setIsUsingFallbackProfile(true)
+          setProfileError('No shelter profile returned yet. Showing fallback profile.')
+          return
+        }
+
+        setProfile({
+          id: payload.shelter.id,
+          name: payload.shelter.name,
+          description: payload.shelter.description ?? 'Partner shelter profile.',
+          city: payload.shelter.city ?? 'CDMX',
+          cover_photo: payload.shelter.cover_photo ?? '',
+          instagram_url: payload.shelter.instagram_url ?? '',
+          stats: payload.shelter.stats,
+        })
+        setIsUsingFallbackProfile(false)
+        setProfileError(null)
+      } catch {
+        if (!isMounted) return
+        setProfile(fallbackShelterProfile)
+        setIsUsingFallbackProfile(true)
+        setProfileError('Shelter profile API is unavailable. Showing fallback profile.')
+      } finally {
+        if (isMounted) setIsLoadingProfile(false)
+      }
+    }
+
+    loadShelterProfile()
+
+    return () => {
+      isMounted = false
+    }
+  }, [shelterId])
 
   const readyDocuments = useMemo(
     () => shelterDocuments.filter((document) => document.status === 'ready'),
@@ -110,17 +187,36 @@ export function ShelterAssistant() {
     <div className="grid gap-4 md:grid-cols-[180px_1fr]">
       <aside className="rounded-lg border border-slate-200 bg-white p-3">
         <div className="grid h-10 w-10 place-items-center rounded-full bg-teal-50 text-xs font-bold text-teal-700">
-          RP
+          {profile.name
+            .split(' ')
+            .map((word) => word[0])
+            .join('')
+            .slice(0, 2)
+            .toUpperCase()}
         </div>
-        <h2 className="mt-3 text-sm font-bold">{shelterProfile.name}</h2>
-        <p className="text-[11px] text-slate-500">{shelterProfile.city}</p>
-        <p className="mt-3 text-xs leading-5 text-slate-600">{shelterProfile.description}</p>
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-bold">{profile.name}</h2>
+          {isLoadingProfile ? <StatusBadge label="Loading" tone="amber" /> : null}
+        </div>
+        <p className="text-[11px] text-slate-500">{profile.city}</p>
+        <p className="mt-3 text-xs leading-5 text-slate-600">{profile.description}</p>
+
+        {profileError ? (
+          <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-[11px] font-semibold text-amber-700">
+            {profileError}
+          </div>
+        ) : null}
+        {isUsingFallbackProfile ? (
+          <div className="mt-2">
+            <StatusBadge label="Fallback profile" tone="amber" />
+          </div>
+        ) : null}
 
         <div className="mt-3 space-y-2">
           {[
-            ['Animals', shelterProfile.stats.total_animals],
-            ['Available', shelterProfile.stats.available_animals],
-            ['Adoptions', shelterProfile.stats.total_adoptions],
+            ['Animals', profile.stats.total_animals],
+            ['Available', profile.stats.available_animals],
+            ['Adoptions', profile.stats.total_adoptions],
           ].map(([label, value]) => (
             <div key={label} className="flex justify-between text-xs">
               <span className="text-slate-500">{label}</span>

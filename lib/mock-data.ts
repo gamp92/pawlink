@@ -95,7 +95,7 @@ export type ShelterProfile = {
 }
 
 export const shelterProfile: ShelterProfile = {
-  id: 'shelter-patitas',
+  id: '7a2f59a5-7d2f-477c-b11d-fe7c98d7aa30',
   name: 'Refugio Patitas',
   description: 'Small CDMX rescue focused on calm, transparent adoptions.',
   city: 'CDMX',
