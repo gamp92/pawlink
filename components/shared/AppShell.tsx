@@ -1,34 +1,79 @@
 import type { ReactNode } from 'react'
+import { MobileBottomNav } from '@/components/shared/MobileBottomNav'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 type AppShellProps = {
   title: string
   subtitle: string
   children: ReactNode
+  activeHref?: string
 }
 
-export function AppShell({ title, subtitle, children }: AppShellProps) {
+const primaryShelterHref = '/shelter/7a2f59a5-7d2f-477c-b11d-fe7c98d7aa30'
+
+const publicNavItems = [
+  { label: 'Home', href: '/', shortLabel: 'H' },
+  { label: 'Adopt', href: '/find-a-pet', shortLabel: 'A' },
+  { label: 'Lost', href: '/lost-found', shortLabel: 'L' },
+  { label: 'Shelter', href: primaryShelterHref, shortLabel: 'S' },
+]
+
+function inferActiveHref(title: string, activeHref?: string) {
+  if (activeHref) return activeHref
+  if (title.toLowerCase().includes('adoption')) return '/find-a-pet'
+  if (title.toLowerCase().includes('lost')) return '/lost-found'
+  if (title.toLowerCase().includes('shelter')) return primaryShelterHref
+  return '/'
+}
+
+export function AppShell({ title, subtitle, children, activeHref }: AppShellProps) {
+  const currentHref = inferActiveHref(title, activeHref)
+
   return (
-    <section className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50 shadow-sm">
-      <div className="border-b border-slate-200 bg-white px-4 py-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs font-bold text-violet-600">
-            <span className="grid h-5 w-5 place-items-center rounded-full bg-teal-50 text-[10px] text-teal-600">
+    <div className="min-h-screen bg-slate-100 pb-20 md:pb-6">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+          <a href="/" className="flex items-center gap-2 text-sm font-black text-violet-700">
+            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-violet-600 text-xs font-black text-white">
               PL
             </span>
-            Pawlink
-          </div>
-          <nav className="flex items-center gap-1 text-[11px]">
-            <span className="rounded border border-slate-200 px-2 py-1 text-slate-500">Shelter Hub</span>
-            <span className="rounded border border-violet-200 bg-violet-50 px-2 py-1 text-violet-700">Find a pet</span>
-            <span className="rounded border border-slate-200 px-2 py-1 text-slate-500">Lost & Found</span>
+            <span>Pawlink</span>
+          </a>
+
+          <nav className="hidden items-center gap-2 md:flex">
+            {publicNavItems.map((item) => {
+              const isActive = currentHref === item.href
+              return (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  className={`rounded-full border px-3 py-2 text-xs font-bold ${
+                    isActive
+                      ? 'border-violet-200 bg-violet-50 text-violet-700'
+                      : 'border-slate-200 bg-white text-slate-500'
+                  }`}
+                >
+                  {item.label}
+                </a>
+              )
+            })}
+            <a href="/login" className="rounded-full bg-slate-950 px-3 py-2 text-xs font-bold text-white">
+              Login
+            </a>
           </nav>
         </div>
-      </div>
-      <div className="border-b border-slate-200 bg-white px-4 py-3">
-        <h1 className="text-lg font-black tracking-tight text-slate-950">{title}</h1>
-        <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
-      </div>
-      <div className="p-4">{children}</div>
-    </section>
+      </header>
+
+      <main className="mx-auto max-w-7xl px-4 py-4 md:p-6">
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 md:p-6">
+            <PageHeader eyebrow="Pawlink" title={title} subtitle={subtitle} />
+          </div>
+          <div className="p-4 md:p-6">{children}</div>
+        </section>
+      </main>
+
+      <MobileBottomNav items={publicNavItems} activeHref={currentHref} />
+    </div>
   )
 }
