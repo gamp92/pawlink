@@ -104,6 +104,27 @@ App runs at http://localhost:3000
 
 ---
 
+## API documentation (Swagger)
+
+Interactive OpenAPI docs for all `/api/*` endpoints:
+
+```
+https://pawlink-theta.vercel.app/api-docs      ← Swagger UI (try endpoints live)
+https://pawlink-theta.vercel.app/openapi.yaml  ← raw spec (importable into Postman)
+```
+
+Locally: `npm run dev` → http://localhost:3000/api-docs
+
+The spec lives at `public/openapi.yaml` and is written by hand from the route
+handlers and `docs/api-contracts/`. When an endpoint changes, update the spec
+in the same PR. Validate with:
+
+```bash
+npx @apidevtools/swagger-cli validate public/openapi.yaml
+```
+
+---
+
 ## Environment variables
 
 See `.env.example` for the full list. Required:
@@ -225,4 +246,5 @@ Rule: No direct pushes to `main`. All changes via PR.
 
 - `docs/schema.sql` — Supabase schema, maintained by Lead
 - `docs/api-contracts/` — API contracts per feature, frozen before development
+- `public/openapi.yaml` — OpenAPI spec, served interactively at `/api-docs`
 - `CLAUDE.md` — Context for AI coding tools
