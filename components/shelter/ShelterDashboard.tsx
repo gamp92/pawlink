@@ -1,5 +1,8 @@
 import { AnimalCard } from '@/components/shared/AnimalCard'
-import { MetricCard } from '@/components/shared/MetricCard'
+import { Button } from '@/components/shared/Button'
+import { DashboardCard } from '@/components/shared/DashboardCard'
+import { SectionTitle } from '@/components/shared/SectionTitle'
+import { StatCard } from '@/components/shared/StatCard'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ShelterHubLayout } from '@/components/shelter/ShelterHubLayout'
 import { adoptionRequests, animals, shelterActivities, shelterProfile } from '@/lib/mock-data'
@@ -11,73 +14,85 @@ export function ShelterDashboard() {
   const featuredAnimals = animals.filter((animal) => animal.status !== 'adopted').slice(0, 3)
 
   return (
-    <ShelterHubLayout active="Dashboard">
-      <div>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-bold">Today at a glance</h2>
-            <p className="mt-1 text-xs text-slate-500">Operational snapshot for the shelter team.</p>
-          </div>
+    <ShelterHubLayout
+      active="Dashboard"
+      title="Today at a glance"
+      subtitle="A focused command center for animals, adoption requests, documents, and next actions."
+      action={<Button href="/dashboard/animals" size="sm">Add animal</Button>}
+    >
+      <div className="space-y-5">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <StatCard label="Total Animals" value={totalAnimals} detail="Across available, in process, and adopted pets" tone="teal" icon="A" />
+          <StatCard label="Pending Requests" value={pendingRequests} detail="Families waiting on shelter review" tone="violet" icon="R" />
+          <StatCard label="Successful Adoptions" value={successfulAdoptions} detail="+3 confirmed this month" tone="rose" icon="S" />
         </div>
 
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <MetricCard label="Total Animals" value={totalAnimals} detail="Across all statuses" />
-          <MetricCard label="Pending Requests" value={pendingRequests} detail="Need shelter review" />
-          <MetricCard label="Successful Adoptions" value={successfulAdoptions} detail="+3 vs last month" />
-        </div>
-
-        <div className="mt-4 grid gap-4 md:grid-cols-[1fr_170px]">
-          <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold">Recent activity</h3>
-              <StatusBadge label="Live mock" tone="purple" />
-            </div>
-            <div className="mt-3 space-y-3">
-              {shelterActivities.map((activity) => (
-                <div key={activity.id} className="border-b border-slate-100 pb-2 last:border-0 last:pb-0">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-bold text-slate-950">{activity.title}</p>
-                    <StatusBadge label={activity.time} tone={activity.tone} />
+        <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
+          <DashboardCard>
+            <SectionTitle
+              title="Recent activity"
+              description="A chronological view of the most important workspace updates."
+              action={<StatusBadge label="Live mock" tone="purple" />}
+            />
+            <div className="mt-5 space-y-3">
+              {shelterActivities.map((activity, index) => (
+                <div key={activity.id} className="relative flex gap-3 pb-3 last:pb-0">
+                  <div className="flex flex-col items-center">
+                    <div className="grid h-10 w-10 place-items-center rounded-full border border-slate-200 bg-slate-50 text-xs font-black text-slate-700">
+                      {index + 1}
+                    </div>
+                    {index < shelterActivities.length - 1 ? <div className="mt-2 h-full w-px bg-slate-200" /> : null}
                   </div>
-                  <p className="mt-1 text-[11px] leading-4 text-slate-500">{activity.description}</p>
+                  <div className="min-w-0 flex-1 rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-black text-slate-950">{activity.title}</p>
+                      <StatusBadge label={activity.time} tone={activity.tone} />
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">{activity.description}</p>
+                  </div>
                 </div>
               ))}
             </div>
-          </section>
+          </DashboardCard>
 
-          <section className="rounded-lg border border-violet-200 bg-violet-50 p-3 shadow-sm">
-            <h3 className="text-sm font-bold text-violet-900">Quick actions</h3>
-            <div className="mt-3 space-y-2">
+          <DashboardCard className="bg-gradient-to-br from-violet-50 to-white">
+            <SectionTitle title="Quick actions" description="Common shelter tasks in one thumb-friendly place." />
+            <div className="mt-5 grid gap-3">
               {[
-                ['Add animal', '/dashboard/animals'],
-                ['Review requests', '/dashboard/requests'],
-                ['Upload document', '/dashboard/documents'],
-              ].map(([label, href]) => (
+                ['Add animal', 'Create a new inventory profile', '/dashboard/animals'],
+                ['Review requests', `${pendingRequests} families need attention`, '/dashboard/requests'],
+                ['Upload document', 'Prepare assistant sources', '/dashboard/documents'],
+              ].map(([label, detail, href]) => (
                 <a
                   key={href}
                   href={href}
-                  className="block rounded border border-violet-200 bg-white px-3 py-2 text-xs font-bold text-violet-700"
+                  className="block rounded-2xl border border-violet-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
                 >
-                  {label}
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-black text-slate-950">{label}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">{detail}</p>
+                    </div>
+                    <span className="grid h-10 w-10 place-items-center rounded-full bg-violet-600 text-sm font-black text-white">+</span>
+                  </div>
                 </a>
               ))}
             </div>
-          </section>
+          </DashboardCard>
         </div>
 
-        <section className="mt-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold">Featured animals</h3>
-            <a href="/dashboard/animals" className="text-xs font-bold text-violet-700">
-              Manage inventory
-            </a>
-          </div>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <DashboardCard>
+          <SectionTitle
+            title="Featured animals"
+            description="Pets currently best positioned for adoption conversations."
+            action={<Button href="/dashboard/animals" variant="secondary" size="sm">Manage</Button>}
+          />
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {featuredAnimals.map((animal) => (
               <AnimalCard key={animal.id} animal={animal} compact />
             ))}
           </div>
-        </section>
+        </DashboardCard>
       </div>
     </ShelterHubLayout>
   )

@@ -2,6 +2,15 @@
 
 import { useMemo, useState } from 'react'
 import { AnimalCard } from '@/components/shared/AnimalCard'
+import { ActionBar } from '@/components/shared/ActionBar'
+import { Badge } from '@/components/shared/Badge'
+import { BottomSheet } from '@/components/shared/BottomSheet'
+import { Button } from '@/components/shared/Button'
+import { DashboardCard } from '@/components/shared/DashboardCard'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { FilterBar } from '@/components/shared/FilterBar'
+import { SearchBar } from '@/components/shared/SearchBar'
+import { SectionTitle } from '@/components/shared/SectionTitle'
 import { StatusBadge, animalStatusTone } from '@/components/shared/StatusBadge'
 import { ShelterHubLayout } from '@/components/shelter/ShelterHubLayout'
 import { animals as initialAnimals, type Animal, type AnimalStatus } from '@/lib/mock-data'
@@ -9,6 +18,12 @@ import { animals as initialAnimals, type Animal, type AnimalStatus } from '@/lib
 type StatusFilter = 'all' | AnimalStatus
 
 const statuses: AnimalStatus[] = ['available', 'in_process', 'adopted']
+const filterOptions: { label: string; value: StatusFilter }[] = [
+  { label: 'All', value: 'all' },
+  { label: 'Available', value: 'available' },
+  { label: 'In process', value: 'in_process' },
+  { label: 'Adopted', value: 'adopted' },
+]
 
 export function AnimalInventory() {
   const [animals, setAnimals] = useState<Animal[]>(initialAnimals)
@@ -16,6 +31,7 @@ export function AnimalInventory() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [selectedId, setSelectedId] = useState(initialAnimals[0]?.id ?? '')
   const [isEditing, setIsEditing] = useState(false)
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
   const selectedAnimal = animals.find((animal) => animal.id === selectedId) ?? animals[0]
   const [draftName, setDraftName] = useState(selectedAnimal?.name ?? '')
 
@@ -36,6 +52,7 @@ export function AnimalInventory() {
     setSelectedId(animal.id)
     setDraftName(animal.name)
     setIsEditing(false)
+    setIsDetailOpen(true)
   }
 
   function updateStatus(status: AnimalStatus) {
@@ -56,109 +73,123 @@ export function AnimalInventory() {
   }
 
   return (
-    <ShelterHubLayout active="Animals">
-      <div className="grid gap-4 md:grid-cols-[1fr_170px]">
+    <ShelterHubLayout
+      active="Animals"
+      title="Animal inventory"
+      subtitle="Search, review, and update adoption readiness with a mobile-first inventory flow."
+      action={<Button size="sm">New animal</Button>}
+    >
+      <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <section>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-bold">Animal inventory</h2>
-              <p className="mt-1 text-xs text-slate-500">Search and update mock adoption statuses locally.</p>
-            </div>
-            <StatusBadge label={`${visibleAnimals.length} shown`} tone="purple" />
-          </div>
-
-          <div className="mt-3 flex flex-wrap gap-2">
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search by name, breed, or species"
-              className="flex-1 rounded border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950"
+          <DashboardCard className="sticky top-0 z-30 bg-white/90 backdrop-blur">
+            <SectionTitle
+              title="Browse animals"
+              description="Use filters to quickly find pets that need an update."
+              action={<StatusBadge label={`${visibleAnimals.length} shown`} tone="purple" />}
             />
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-              className="rounded border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-            >
-              <option value="all">All statuses</option>
-              {statuses.map((status) => (
-                <option key={status} value={status}>
-                  {status.replace('_', ' ')}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div className="mt-4 space-y-3">
+              <SearchBar value={query} onChange={setQuery} placeholder="Search name, breed, or species" />
+              <FilterBar options={filterOptions} value={statusFilter} onChange={setStatusFilter} />
+            </div>
+          </DashboardCard>
 
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {visibleAnimals.map((animal) => (
               <button key={animal.id} onClick={() => selectAnimal(animal)} className="text-left">
-                <AnimalCard animal={animal} compact />
+                <AnimalCard animal={animal} compact selected={selectedAnimal?.id === animal.id} />
               </button>
             ))}
           </div>
+
+          {visibleAnimals.length === 0 ? (
+            <div className="mt-4">
+              <EmptyState
+                title="No animals match those filters"
+                description="Try clearing the search or switching status filters."
+                action={<Button variant="secondary" onClick={() => { setQuery(''); setStatusFilter('all') }}>Clear filters</Button>}
+              />
+            </div>
+          ) : null}
         </section>
 
-        <aside className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+        <BottomSheet
+          open={Boolean(selectedAnimal) && isDetailOpen}
+          onClose={() => setIsDetailOpen(false)}
+          title="Animal details"
+          className="lg:sticky lg:top-4 lg:self-start"
+        >
           {selectedAnimal ? (
             <>
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-bold">Animal details</h3>
-                <StatusBadge
-                  label={selectedAnimal.status.replace('_', ' ')}
-                  tone={animalStatusTone(selectedAnimal.status)}
-                />
+              <div className="grid h-40 place-items-center rounded-2xl bg-gradient-to-br from-violet-50 to-teal-50 text-5xl font-black text-violet-700">
+                {selectedAnimal.name.slice(0, 1)}
               </div>
 
-              <div className="mt-3 grid h-20 place-items-center rounded bg-violet-50 text-2xl">
-                {selectedAnimal.species}
+              <div className="mt-4 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  {isEditing ? (
+                    <input
+                      value={draftName}
+                      onChange={(event) => setDraftName(event.target.value)}
+                      className="w-full rounded-xl border border-violet-200 px-3 py-3 text-lg font-black text-slate-950 outline-none"
+                    />
+                  ) : (
+                    <h3 className="truncate text-2xl font-black tracking-tight text-slate-950">{selectedAnimal.name}</h3>
+                  )}
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                    {selectedAnimal.breed} - {selectedAnimal.age_years}y - {selectedAnimal.size}
+                  </p>
+                </div>
+                <StatusBadge label={selectedAnimal.status.replace('_', ' ')} tone={animalStatusTone(selectedAnimal.status)} />
               </div>
 
-              <div className="mt-3">
-                {isEditing ? (
-                  <input
-                    value={draftName}
-                    onChange={(event) => setDraftName(event.target.value)}
-                    className="w-full rounded border border-violet-200 px-3 py-2 text-sm font-bold text-slate-950"
-                  />
-                ) : (
-                  <h4 className="text-lg font-black tracking-tight">{selectedAnimal.name}</h4>
-                )}
-                <p className="mt-1 text-xs text-slate-500">
-                  {selectedAnimal.breed} - {selectedAnimal.age_years}y - {selectedAnimal.size}
-                </p>
-                <p className="mt-3 text-xs leading-5 text-slate-600">{selectedAnimal.description}</p>
+              <p className="mt-3 text-sm leading-6 text-slate-600">{selectedAnimal.description}</p>
+
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <Badge tone="teal">{selectedAnimal.species}</Badge>
+                <Badge tone="slate">{selectedAnimal.energy_level} energy</Badge>
+                <Badge tone={selectedAnimal.good_with_kids ? 'green' : 'slate'}>
+                  {selectedAnimal.good_with_kids ? 'Kids ok' : 'Kids review'}
+                </Badge>
+                <Badge tone={selectedAnimal.good_with_pets ? 'green' : 'slate'}>
+                  {selectedAnimal.good_with_pets ? 'Pets ok' : 'Solo pet'}
+                </Badge>
               </div>
 
-              <div className="mt-3 space-y-2">
+              <div className="mt-4 grid gap-2">
                 {statuses.map((status) => (
                   <button
                     key={status}
                     onClick={() => updateStatus(status)}
-                    className="w-full rounded border border-slate-200 bg-slate-50 px-3 py-2 text-left text-xs font-bold text-slate-700"
+                    className={`w-full rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${
+                      selectedAnimal.status === status
+                        ? 'border-violet-600 bg-violet-600 text-white'
+                        : 'border-slate-200 bg-slate-50 text-slate-700'
+                    }`}
                   >
                     Mark {status.replace('_', ' ')}
                   </button>
                 ))}
               </div>
 
-              <div className="mt-3 flex gap-2">
+              <ActionBar className="mt-4 rounded-2xl">
                 {isEditing ? (
                   <>
-                    <button onClick={saveDraft} className="flex-1 rounded bg-violet-600 px-3 py-2 text-xs font-bold text-white">
+                    <Button onClick={saveDraft} fullWidth>
                       Save
-                    </button>
-                    <button onClick={() => setIsEditing(false)} className="flex-1 rounded border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600">
+                    </Button>
+                    <Button onClick={() => setIsEditing(false)} variant="secondary" fullWidth>
                       Cancel
-                    </button>
+                    </Button>
                   </>
                 ) : (
-                  <button onClick={() => setIsEditing(true)} className="w-full rounded bg-violet-600 px-3 py-2 text-xs font-bold text-white">
+                  <Button onClick={() => setIsEditing(true)} fullWidth>
                     Edit mock details
-                  </button>
+                  </Button>
                 )}
-              </div>
+              </ActionBar>
             </>
           ) : null}
-        </aside>
+        </BottomSheet>
       </div>
     </ShelterHubLayout>
   )

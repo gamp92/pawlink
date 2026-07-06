@@ -1,6 +1,14 @@
 'use client'
 
 import { useState } from 'react'
+import { ActionBar } from '@/components/shared/ActionBar'
+import { Avatar } from '@/components/shared/Avatar'
+import { Badge } from '@/components/shared/Badge'
+import { BottomSheet } from '@/components/shared/BottomSheet'
+import { Button } from '@/components/shared/Button'
+import { DashboardCard } from '@/components/shared/DashboardCard'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { SectionTitle } from '@/components/shared/SectionTitle'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ShelterHubLayout } from '@/components/shelter/ShelterHubLayout'
 import { adoptionRequests as initialRequests, type AdoptionRequest } from '@/lib/mock-data'
@@ -17,6 +25,7 @@ const requestTone: Record<RequestStatus, 'purple' | 'teal' | 'red' | 'slate' | '
 export function AdoptionRequestsPanel() {
   const [requests, setRequests] = useState<AdoptionRequest[]>(initialRequests)
   const [selectedId, setSelectedId] = useState(initialRequests[0]?.id ?? '')
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
   const selectedRequest = requests.find((request) => request.id === selectedId) ?? requests[0]
 
   function updateRequest(status: RequestStatus) {
@@ -35,101 +44,128 @@ export function AdoptionRequestsPanel() {
   }
 
   return (
-    <ShelterHubLayout active="Requests">
-      <div className="grid gap-4 md:grid-cols-[1fr_170px]">
+    <ShelterHubLayout
+      active="Requests"
+      title="Adoption inbox"
+      subtitle="Review applicants, compatibility context, and local approval decisions from one focused inbox."
+      action={<StatusBadge label={`${requests.length} requests`} tone="purple" />}
+    >
+      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <section>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-bold">Adoption requests</h2>
-              <p className="mt-1 text-xs text-slate-500">Review family matches and update request state locally.</p>
-            </div>
-            <StatusBadge label={`${requests.length} requests`} tone="purple" />
-          </div>
+          <DashboardCard>
+            <SectionTitle
+              title="Applicant queue"
+              description="Newest requests appear first with compatibility and household signals."
+            />
+          </DashboardCard>
 
-          <div className="mt-3 space-y-3">
+          <div className="mt-4 space-y-3">
             {requests.map((request) => (
               <button
                 key={request.id}
-                onClick={() => setSelectedId(request.id)}
-                className="w-full rounded-lg border border-slate-200 bg-white p-3 text-left shadow-sm"
+                onClick={() => {
+                  setSelectedId(request.id)
+                  setIsDetailOpen(true)
+                }}
+                className={`w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg ${
+                  selectedRequest?.id === request.id ? 'border-violet-300' : 'border-slate-200'
+                }`}
               >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-bold text-slate-950">{request.family.full_name}</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Wants to meet {request.animal.name} - {request.compatibility_score}% match
-                    </p>
+                <div className="flex gap-3">
+                  <Avatar name={request.family.full_name} tone={request.status === 'approved' ? 'teal' : 'violet'} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-black text-slate-950">{request.family.full_name}</p>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">
+                          Wants to meet {request.animal.name}
+                        </p>
+                      </div>
+                      <StatusBadge label={request.status} tone={requestTone[request.status]} />
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Badge tone="violet">{Math.round(request.compatibility_score)}% match</Badge>
+                      <Badge tone="slate">{request.family.living_space.replace('_', ' ')}</Badge>
+                      <Badge tone={request.family.has_children ? 'green' : 'slate'}>
+                        {request.family.has_children ? 'Children' : 'No children'}
+                      </Badge>
+                    </div>
                   </div>
-                  <StatusBadge label={request.status} tone={requestTone[request.status]} />
                 </div>
               </button>
             ))}
           </div>
+
+          {requests.length === 0 ? (
+            <div className="mt-4">
+              <EmptyState title="No adoption requests yet" description="New family applications will appear here." />
+            </div>
+          ) : null}
         </section>
 
-        <aside className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+        <BottomSheet
+          open={Boolean(selectedRequest) && isDetailOpen}
+          onClose={() => setIsDetailOpen(false)}
+          title="Request detail"
+          className="lg:sticky lg:top-4 lg:self-start"
+        >
           {selectedRequest ? (
             <>
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-bold">Request detail</h3>
+                <div className="flex items-center gap-3">
+                  <Avatar name={selectedRequest.family.full_name} size="lg" />
+                  <div>
+                    <h3 className="text-lg font-black tracking-tight text-slate-950">{selectedRequest.family.full_name}</h3>
+                    <p className="text-xs font-semibold text-slate-500">{selectedRequest.family.email}</p>
+                  </div>
+                </div>
                 <StatusBadge label={selectedRequest.status} tone={requestTone[selectedRequest.status]} />
               </div>
 
-              <div className="mt-3 rounded bg-violet-50 p-3 text-center text-violet-900">
-                <p className="text-3xl font-black">{Math.round(selectedRequest.compatibility_score)}%</p>
-                <p className="text-[11px] font-semibold">match with {selectedRequest.animal.name}</p>
+              <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-4 text-center text-violet-900">
+                <p className="text-4xl font-black">{Math.round(selectedRequest.compatibility_score)}%</p>
+                <p className="mt-1 text-xs font-bold">match with {selectedRequest.animal.name}</p>
               </div>
 
-              <div className="mt-3 space-y-2 text-xs">
-                <p>
-                  <strong>Family:</strong> {selectedRequest.family.full_name}
-                </p>
-                <p>
-                  <strong>Email:</strong> {selectedRequest.family.email}
-                </p>
-                <p>
-                  <strong>Home:</strong> {selectedRequest.family.living_space.replace('_', ' ')}
-                </p>
-                <p>
-                  <strong>Children:</strong> {selectedRequest.family.has_children ? 'Yes' : 'No'}
-                </p>
-                <p>
-                  <strong>Other pets:</strong> {selectedRequest.family.has_other_pets ? 'Yes' : 'No'}
-                </p>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <Badge tone="slate">{selectedRequest.family.living_space.replace('_', ' ')}</Badge>
+                <Badge tone={selectedRequest.family.has_children ? 'green' : 'slate'}>
+                  {selectedRequest.family.has_children ? 'Has children' : 'No children'}
+                </Badge>
+                <Badge tone={selectedRequest.family.has_other_pets ? 'teal' : 'slate'}>
+                  {selectedRequest.family.has_other_pets ? 'Other pets' : 'No pets'}
+                </Badge>
+                <Badge tone="violet">{selectedRequest.animal.name}</Badge>
               </div>
 
-              <div className="mt-3">
+              <div className="mt-5">
                 <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Reasons</p>
-                <ul className="mt-2 text-xs leading-5 text-slate-600">
+                <ul className="mt-2 space-y-2 text-sm leading-6 text-slate-600">
                   {selectedRequest.compatibility_reasons.map((reason) => (
-                    <li key={reason}>- {reason}</li>
+                    <li key={reason} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      {reason}
+                    </li>
                   ))}
                 </ul>
               </div>
 
               {selectedRequest.notes ? (
-                <p className="mt-3 rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600">
+                <p className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-600">
                   {selectedRequest.notes}
                 </p>
               ) : null}
 
-              <div className="mt-3 flex gap-2">
-                <button
-                  onClick={() => updateRequest('approved')}
-                  className="flex-1 rounded bg-violet-600 px-3 py-2 text-xs font-bold text-white"
-                >
+              <ActionBar className="mt-4 rounded-2xl">
+                <Button onClick={() => updateRequest('approved')} fullWidth>
                   Approve
-                </button>
-                <button
-                  onClick={() => updateRequest('rejected')}
-                  className="flex-1 rounded border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600"
-                >
+                </Button>
+                <Button onClick={() => updateRequest('rejected')} variant="danger" fullWidth>
                   Reject
-                </button>
-              </div>
+                </Button>
+              </ActionBar>
             </>
           ) : null}
-        </aside>
+        </BottomSheet>
       </div>
     </ShelterHubLayout>
   )

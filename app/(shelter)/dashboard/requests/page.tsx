@@ -1,13 +1,10 @@
 import { AdoptionRequestsPanel } from '@/components/shelter/AdoptionRequestsPanel'
-import { AppShell } from '@/components/shared/AppShell'
 
 export default function DashboardRequestsPage() {
   return (
-    <main className="min-h-screen bg-slate-100 p-6 text-slate-950">
+    <main className="min-h-screen bg-slate-100 px-4 py-4 pb-20 text-slate-950 md:p-6">
       <div className="mx-auto max-w-7xl">
-        <AppShell title="Adoption Requests" subtitle="Review family matches and update mock request states">
-          <AdoptionRequestsPanel />
-        </AppShell>
+        <AdoptionRequestsPanel />
       </div>
     </main>
   )
