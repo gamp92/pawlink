@@ -125,6 +125,25 @@ npx @apidevtools/swagger-cli validate public/openapi.yaml
 
 ---
 
+## Smoke test
+
+`scripts/smoke-test.mjs` exercises every endpoint against real infrastructure
+(Vercel + Supabase + webhooks + Edge Functions + Groq) — no mocks. Run it
+before Demo Day, after big merges, or whenever Supabase wakes from a pause.
+
+```bash
+node scripts/smoke-test.mjs                        # against production
+node scripts/smoke-test.mjs http://localhost:3000  # against local dev
+node scripts/smoke-test.mjs --matching             # include /api/matching (burns Groq tokens)
+```
+
+It discovers seeded rows through the public API, creates throwaway rows to
+test writes and async webhooks (social-post, geo-alert), and deletes
+everything it created. Needs `.env` (service role) for the adoption-request
+checks and cleanup; without it those are skipped. Exits non-zero on failure.
+
+---
+
 ## Environment variables
 
 See `.env.example` for the full list. Required:
