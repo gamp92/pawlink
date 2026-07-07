@@ -80,6 +80,7 @@ Actualizado: 2026-07-03
 - [x] `adoption-confirmation` — envía email de confirmación al aprobar adopción
 - [x] Database Webhooks configurados — verificado 2026-07-02: `on_animal_insert` → social-post, `on_lost_found_insert` → geo-alert, `on_adoption_approved` → adoption-confirmation (las 3 functions ACTIVE, v3)
 - [x] Secrets verificados en Supabase: `GROQ_API_KEY`, `RESEND_API_KEY` (configurados 2026-06-20)
+- [ ] (stretch) `shelter-notification` — Edge Function + webhook en INSERT de `adoption_requests` → email al shelter avisando que llegó una solicitud nueva. La Feature Guide lo describe pero nunca se implementó (hoy el shelter solo se entera al abrir su dashboard). Mismo patrón que las otras 3 functions
 
 ---
 
