@@ -45,7 +45,7 @@ Actualizado: 2026-07-03
 - [ ] `POST /api/upload` — subir foto a Supabase Storage bucket `pets` — ⚠️ bloqueado: no existe contrato en `docs/api-contracts/` (regla: contrato primero). Nota: el contrato F3 asume que el frontend sube fotos directo a Storage; definir con Jose si va endpoint o subida directa
 - [x] Middleware de auth — `/dashboard/*` protegido con sesión de Supabase (2026-07-03). Sin sesión → redirect a `/login?redirect=<ruta>`. ⚠️ Falta que el frontend cree la página `/login`
 - [x] RLS policies — verificadas via `pg_policies` 2026-07-02 (12 policies en 5 tablas, coinciden con schema.sql)
-- [ ] Testing con datos reales del seed
+- [x] Testing con datos reales del seed — smoke-test completo contra producción 2026-07-06 (ver nota al final)
 
 ---
 
@@ -55,7 +55,7 @@ Actualizado: 2026-07-03
 - [x] `POST /api/matching` — matching con Groq (lógica real implementada)
   - [x] Bug corregido 2026-07-03: la respuesta de Groq se truncaba (`finish_reason: length`) y el JSON quedaba inválido → 502. Fix: prompt compacto, 2 razones cortas, `max_tokens: 3000` y JSON mode. Verificado local: 200 con resultados rankeados
   - ⚠️ Límite del free tier de Groq: 6,000 tokens/min ≈ **1 llamada de matching por minuto**. Para el demo alcanza; si se necesita más, upgrade a Dev Tier en console.groq.com/settings/billing
-- [ ] Testing con datos reales del seed
+- [x] Testing con datos reales del seed — smoke-test completo contra producción 2026-07-06 (ver nota al final)
 
 ---
 
@@ -67,14 +67,14 @@ Actualizado: 2026-07-03
 - [x] `POST /api/lost-found/alert` — debug endpoint (testing PostGIS, no envía emails)
 - [x] `POST /api/vision` — comparación de fotos con AWS Rekognition (código listo)
 - [ ] Crear cuenta AWS + configurar credenciales para que /api/vision funcione
-- [ ] Testing con datos reales del seed
+- [x] Testing con datos reales del seed — smoke-test completo contra producción 2026-07-06 (ver nota al final)
 
 ---
 
 ## Edge Functions (Supabase)
 
 - [x] `social-post` — genera post en español con Groq al crear animal
-  - [ ] ⚠️ Groq decomisionó `llama3-8b-8192` → código actualizado a `llama-3.1-8b-instant` (también en `/api/matching`). **Falta re-deploy**: `supabase functions deploy social-post`
+  - [x] Groq decomisionó `llama3-8b-8192` → código actualizado a `llama-3.1-8b-instant` y re-deployado (v4) el 2026-07-02. Verificado end-to-end en producción 2026-07-06
 - [x] `geo-alert` — busca usuarios cercanos con PostGIS + envía emails via Resend
   - [x] Bug corregido 2026-07-02: `get_users_near_report` no devolvía nadie con `reporter_id` NULL (`!=` vs `is distinct from`) + faltaba `grant select on auth.users to service_role` para llamadas via PostgREST. Ambos aplicados como migraciones y reflejados en `docs/schema.sql`
 - [x] `adoption-confirmation` — envía email de confirmación al aprobar adopción
@@ -112,6 +112,19 @@ Actualizado: 2026-07-03
 - [x] `docs/guia-vercel-supabase.md`
 - [x] `CLAUDE.md`
 - [x] `README.md`
+
+---
+
+## Smoke-test de producción — 2026-07-06
+
+Todos los endpoints probados contra https://pawlink-theta.vercel.app con datos del seed:
+
+- **Lecturas (9/9 ✓)**: animals (con filtros y 400 sin shelter_id), animals/public, shelters/[id] (stats + 404), adoption-requests, lost-found (con y sin filtro PostGIS de radio)
+- **Escrituras F1 (✓)**: POST animal → webhook social-post generó el post (Edge Function 200, v4) → PATCH → DELETE. POST solicitud con compatibility_score → GET la devuelve con score → PATCH a `seen` (adoption-confirmation 200 con skip correcto, no email) → PATCH inválido 400
+- **Escrituras F3 (✓)**: POST reporte en Madrid → geo-alert 200 (alertó solo a test+madrid1 a 34m, madrid2 a 4km excluido) → PATCH a resolved. /api/lost-found/alert debug ✓
+- **`/api/vision`**: 503 limpio "AWS credentials not configured" — esperado, único bloqueado
+- Datos de prueba borrados después de cada flujo
+- Hallazgo: `get_reports_near_point` existía en la DB pero no en schema.sql — sincronizado
 
 ---
 
