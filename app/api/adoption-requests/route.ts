@@ -54,17 +54,32 @@ export async function GET(request: Request) {
 // Contract: docs/api-contracts/f2-smart-adoption.md
 export async function POST(request: Request) {
   const body = await request.json()
-  const { animal_id, shelter_id, family_id, living_space, lifestyle, experience, has_other_pets, has_children } = body
+  const { animal_id, shelter_id, family_id, compatibility_score, compatibility_reasons } = body
+  // Contract sends the questionnaire nested under family_profile; flat fields kept for compatibility
+  const profile = body.family_profile ?? body
+  const { living_space, lifestyle, experience, has_other_pets, has_children } = profile
 
   if (!animal_id || !shelter_id || !family_id) {
     return NextResponse.json({ error: 'animal_id, shelter_id and family_id are required' }, { status: 400 })
+  }
+
+  const hasInvalidScore =
+    compatibility_score !== undefined &&
+    (typeof compatibility_score !== 'number' || compatibility_score < 0 || compatibility_score > 100)
+  if (hasInvalidScore) {
+    return NextResponse.json({ error: 'compatibility_score must be a number between 0 and 100' }, { status: 400 })
   }
 
   const supabase = createServerClient()
 
   const { data, error } = await supabase
     .from('adoption_requests')
-    .insert({ animal_id, shelter_id, family_id, living_space, lifestyle, experience, has_other_pets, has_children })
+    .insert({
+      animal_id, shelter_id, family_id, living_space, lifestyle, experience, has_other_pets, has_children,
+      ...(compatibility_score !== undefined && { compatibility_score }),
+      // Stored as JSON string (schema: compatibility_reasons text) — GET parses it back
+      ...(Array.isArray(compatibility_reasons) && { compatibility_reasons: JSON.stringify(compatibility_reasons) }),
+    })
     .select('id, status, animal_id, shelter_id, created_at')
     .single()
 
