@@ -53,6 +53,8 @@ Actualizado: 2026-07-03
 
 - [x] `GET /api/animals/public` — galería pública con filtros
 - [x] `POST /api/matching` — matching con Groq (lógica real implementada)
+  - [x] Bug corregido 2026-07-03: la respuesta de Groq se truncaba (`finish_reason: length`) y el JSON quedaba inválido → 502. Fix: prompt compacto, 2 razones cortas, `max_tokens: 3000` y JSON mode. Verificado local: 200 con resultados rankeados
+  - ⚠️ Límite del free tier de Groq: 6,000 tokens/min ≈ **1 llamada de matching por minuto**. Para el demo alcanza; si se necesita más, upgrade a Dev Tier en console.groq.com/settings/billing
 - [ ] Testing con datos reales del seed
 
 ---
