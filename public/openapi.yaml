@@ -232,11 +232,19 @@ paths:
                 animal_id: { type: string, format: uuid }
                 shelter_id: { type: string, format: uuid }
                 family_id: { type: string, format: uuid }
-                living_space: { type: string, enum: [apartment, house_no_yard, house_yard] }
-                lifestyle: { type: string, enum: [sedentary, moderate, active] }
-                experience: { type: string, enum: [none, some, experienced] }
-                has_other_pets: { type: boolean }
-                has_children: { type: boolean }
+                family_profile:
+                  allOf: [{ $ref: '#/components/schemas/FamilyProfile' }]
+                  description: Cuestionario anidado (shape del contrato F2). También se aceptan los mismos campos planos en el body.
+                compatibility_score:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                  description: Score calculado por /api/matching — se guarda para que el shelter lo vea en su dashboard
+                  example: 94.5
+                compatibility_reasons:
+                  type: array
+                  items: { type: string }
+                  example: [Temperamento tranquilo, Buena con niños]
       responses:
         '201':
           description: Solicitud creada
