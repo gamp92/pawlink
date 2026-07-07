@@ -139,8 +139,17 @@ node scripts/smoke-test.mjs --matching             # include /api/matching (burn
 
 It discovers seeded rows through the public API, creates throwaway rows to
 test writes and async webhooks (social-post, geo-alert), and deletes
-everything it created. Needs `.env` (service role) for the adoption-request
-checks and cleanup; without it those are skipped. Exits non-zero on failure.
+everything it created. Exits non-zero on failure.
+
+Notes:
+
+- Run it **from the repo root** — it reads `.env` there. With `.env` (service
+  role) it runs all 22 checks; without it, the adoption-request checks and
+  direct cleanups are skipped and marked `⊘`.
+- Output: `✓` passed · `✗ FAIL` failed · `⊘` skipped, plus a final summary
+  (`Resultado: 22/22 checks OK`). Failures are listed at the end.
+- No dependencies to install — plain Node 18+.
+- Takes ~30s; the slowest part is waiting for the social-post webhook (Groq).
 
 ---
 
