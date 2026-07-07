@@ -303,6 +303,56 @@ grant select on auth.users to service_role;
 
 
 -- ============================================================
+-- HELPER FUNCTION — PostGIS radius query for the Lost & Found map
+-- Called by GET /api/lost-found when lat/lng are provided.
+-- (Existed in the live DB but was missing from this file — synced 2026-07-06)
+-- ============================================================
+
+create or replace function get_reports_near_point(
+  lat           float,
+  lng           float,
+  radius_m      float default 5000,
+  filter_status text default 'open',
+  filter_type   text default null,
+  result_limit  int default 50
+)
+returns table(
+  id uuid, report_type text, pet_name text, species text, breed text,
+  color text, description text, photo_urls text[], location json,
+  location_notes text, city text, status text,
+  matched_report_id uuid, match_confidence numeric, created_at timestamptz
+)
+language sql
+as $$
+  select
+    r.id,
+    r.report_type,
+    r.pet_name,
+    r.species,
+    r.breed,
+    r.color,
+    r.description,
+    r.photo_urls,
+    json_build_object(
+      'lat', ST_Y(r.location::geometry),
+      'lng', ST_X(r.location::geometry)
+    ) as location,
+    r.location_notes,
+    r.city,
+    r.status,
+    r.matched_report_id,
+    r.match_confidence,
+    r.created_at
+  from lost_found_reports r
+  where ST_DWithin(r.location, ST_MakePoint(lng, lat)::geography, radius_m)
+    and r.status = filter_status
+    and (filter_type is null or r.report_type = filter_type)
+  order by r.created_at desc
+  limit result_limit;
+$$;
+
+
+-- ============================================================
 -- UPDATED_AT TRIGGER
 -- Auto-updates updated_at on every row change
 -- ============================================================
