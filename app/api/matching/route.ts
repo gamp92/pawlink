@@ -61,7 +61,9 @@ export async function POST(request: Request) {
     good_with_pets: a.good_with_pets,
   }))
 
-  const prompt = `You are an expert animal adoption counselor. Given a family profile and a list of available animals, score each animal's compatibility with the family from 0 to 100 and provide 2-3 short reasons.
+  // Prompt kept compact on purpose: Groq free tier allows 6,000 tokens/minute and
+  // truncates long completions (finish_reason: length), which breaks JSON parsing.
+  const prompt = `You are an expert animal adoption counselor. Score each animal's compatibility with the family from 0 to 100.
 
 Family profile:
 - Living space: ${family_profile.living_space}
@@ -71,18 +73,12 @@ Family profile:
 - Has other pets: ${family_profile.has_other_pets ?? false}
 
 Available animals:
-${JSON.stringify(animalsForPrompt, null, 2)}
+${JSON.stringify(animalsForPrompt)}
 
-Respond ONLY with a valid JSON array, no extra text. Format:
-[
-  {
-    "id": "animal-uuid",
-    "compatibility_score": 94.5,
-    "compatibility_reasons": ["reason 1", "reason 2", "reason 3"]
-  }
-]
+Respond with a JSON object in this exact format:
+{"results": [{"id": "animal-uuid", "compatibility_score": 94.5, "compatibility_reasons": ["reason 1", "reason 2"]}]}
 
-Sort by compatibility_score descending.`
+Rules: include every animal, exactly 2 reasons each with at most 8 words per reason, sorted by compatibility_score descending.`
 
   const groqResponse = await fetch(GROQ_API_URL, {
     method: 'POST',
@@ -94,6 +90,9 @@ Sort by compatibility_score descending.`
       model: GROQ_MODEL,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.3,
+      max_tokens: 3000,
+      // JSON mode: Groq guarantees syntactically valid JSON (no markdown fences)
+      response_format: { type: 'json_object' },
     }),
   })
 
@@ -102,11 +101,12 @@ Sort by compatibility_score descending.`
   }
 
   const groqData = await groqResponse.json()
-  const content = groqData.choices?.[0]?.message?.content ?? '[]'
+  const content = groqData.choices?.[0]?.message?.content ?? '{}'
 
-  let scores: { id: string; compatibility_score: number; compatibility_reasons: string[] }[]
+  type Score = { id: string; compatibility_score: number; compatibility_reasons: string[] }
+  let scores: Score[]
   try {
-    scores = JSON.parse(content)
+    scores = JSON.parse(content).results ?? []
   } catch {
     return NextResponse.json({ error: 'Failed to parse Groq response' }, { status: 502 })
   }
