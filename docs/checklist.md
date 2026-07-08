@@ -65,8 +65,10 @@ Actualizado: 2026-07-03
 - [x] `POST /api/lost-found` — crea reporte + dispara geo-alert Edge Function
 - [x] `PATCH /api/lost-found/[id]` — cierra reporte
 - [x] `POST /api/lost-found/alert` — debug endpoint (testing PostGIS, no envía emails)
-- [x] `POST /api/vision` — comparación de fotos con AWS Rekognition (código listo)
-- [ ] Crear cuenta AWS + configurar credenciales para que /api/vision funcione
+- [x] `POST /api/vision` — comparación de fotos con AWS Rekognition
+  - [x] Reescrito 2026-07-07: el código original usaba `CompareFaces` (solo caras humanas) y mandaba URLs (Rekognition exige bytes) — nunca habría funcionado. Ahora usa `DetectLabels` en ambas fotos + similitud ponderada de etiquetas (raza/color), con corto-circuito a 0 si las especies no coinciden. Verificado: mismo perro → 100/match, perro vs gato → 0
+- [x] Cuenta AWS creada + credenciales verificadas contra Rekognition (2026-07-07, usuario IAM `pawlink-rekognition` con ReadOnly, región us-east-1)
+- [ ] Poner `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` en Vercel (Settings → Environment Variables) para que /api/vision funcione en producción
 - [x] Testing con datos reales del seed — smoke-test completo contra producción 2026-07-06 (ver nota al final)
 
 ---
