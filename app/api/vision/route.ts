@@ -67,9 +67,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Target report not found or has no photo' }, { status: 404 })
   }
 
+  const sourceUrl = sourceResult.data.photo_urls[0]
+  const targetUrl = targetResult.data.photo_urls[0]
+
+  // Reports are anonymous public inserts, so stored photo_urls are untrusted
+  // input — fetching arbitrary URLs from the server would be an SSRF vector.
+  if (!isAllowedPhotoUrl(sourceUrl) || !isAllowedPhotoUrl(targetUrl)) {
+    return NextResponse.json({ error: 'Report photo URL host is not allowed' }, { status: 422 })
+  }
+
   const [sourceLabels, targetLabels] = await Promise.all([
-    detectLabels(sourceResult.data.photo_urls[0]),
-    detectLabels(targetResult.data.photo_urls[0]),
+    detectLabels(sourceUrl),
+    detectLabels(targetUrl),
   ])
 
   if (!sourceLabels.ok || !targetLabels.ok) {
@@ -98,11 +107,38 @@ export async function POST(request: Request) {
   )
 }
 
+// Only fetch photos from hosts we control (Supabase Storage) or seed from
+// (Unsplash). Exact HTTPS hostname match — TLS then guarantees we talk to the
+// real host, so DNS tricks can't redirect the fetch to internal addresses.
+const EXTRA_PHOTO_HOSTS = ['images.unsplash.com']
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024 // Rekognition's own limit for image bytes
+
+function allowedPhotoHosts(): Set<string> {
+  const hosts = new Set(EXTRA_PHOTO_HOSTS)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (supabaseUrl) hosts.add(new URL(supabaseUrl).hostname.toLowerCase())
+  return hosts
+}
+
+function isAllowedPhotoUrl(rawUrl: string): boolean {
+  try {
+    const url = new URL(rawUrl)
+    const hostname = url.hostname.replace(/\.$/, '').toLowerCase()
+    return url.protocol === 'https:' && allowedPhotoHosts().has(hostname)
+  } catch {
+    return false
+  }
+}
+
 async function detectLabels(imageUrl: string): Promise<LabelResult> {
-  const image = await fetch(imageUrl)
+  // redirect: 'manual' — a redirect could point anywhere; refuse to follow it
+  const image = await fetch(imageUrl, { redirect: 'manual' })
   if (!image.ok) return { ok: false, labels: [] }
 
-  const bytes = Buffer.from(await image.arrayBuffer()).toString('base64')
+  const buffer = await image.arrayBuffer()
+  if (buffer.byteLength > MAX_IMAGE_BYTES) return { ok: false, labels: [] }
+
+  const bytes = Buffer.from(buffer).toString('base64')
   const response = await rekognitionRequest({
     Image: { Bytes: bytes },
     MaxLabels: 15,
