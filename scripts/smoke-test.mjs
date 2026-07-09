@@ -124,7 +124,7 @@ async function checkReads() {
   const nearby = await api('GET', '/api/lost-found?lat=19.4117&lng=-99.1727&radius_m=3000')
   record(nearby.status === 200 && (nearby.json?.reports?.length ?? 0) > 0, 'GET /api/lost-found con radio PostGIS', `${nearby.json?.reports?.length} en 3km`)
 
-  return { shelterId, seedReportIds: (reports.json?.reports ?? []).map((r) => r.id) }
+  return { shelterId }
 }
 
 // ── Animal lifecycle: POST → social-post webhook → PATCH → DELETE ──────────
@@ -229,12 +229,31 @@ async function checkLostFoundLifecycle() {
 
 // ── Vision + matching ───────────────────────────────────────────────────────
 
-async function checkVision(seedReportIds) {
+async function checkVision() {
   console.log('\nVision matching (AWS Rekognition):')
-  const [source, target] = seedReportIds
-  const res = await api('POST', '/api/vision', { source_report_id: source, target_report_id: target })
-  const awsPending = res.status === 503
-  record(res.status === 200 || awsPending, 'POST /api/vision', awsPending ? '503: AWS pendiente (esperado hasta configurar credenciales)' : `status ${res.status}`)
+  // Self-contained: two throwaway reports with the SAME dog photo, placed in
+  // the middle of the Atlantic so the geo-alert webhook finds nobody to email.
+  const photo = 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=600'
+  const ocean = { location: { lat: 0, lng: -30 }, city: 'smoke-test', species: 'dog', photo_urls: [photo] }
+  const a = await api('POST', '/api/lost-found', { report_type: 'lost', pet_name: 'SMOKE-VISION-A', ...ocean })
+  const b = await api('POST', '/api/lost-found', { report_type: 'found', pet_name: 'SMOKE-VISION-B', ...ocean })
+  const [sourceId, targetId] = [a.json?.report?.id, b.json?.report?.id]
+  if (!sourceId || !targetId) return record(false, 'POST /api/vision', 'no se pudieron crear los reportes de prueba')
+
+  try {
+    const res = await api('POST', '/api/vision', { source_report_id: sourceId, target_report_id: targetId })
+    if (res.status === 503) return record(true, 'POST /api/vision', '503: AWS pendiente (esperado hasta configurar credenciales)')
+    const match = res.json?.match
+    record(res.status === 200 && match?.is_match === true, 'POST /api/vision misma foto → match', `confidence: ${match?.confidence}`)
+  } finally {
+    await cleanupVisionReports([sourceId, targetId])
+  }
+}
+
+async function cleanupVisionReports(ids) {
+  if (!hasServiceAccess) return skip('cleanup reportes de vision', 'sin service role')
+  const del = await supaRest('DELETE', `lost_found_reports?id=in.(${ids.join(',')})`)
+  record(del.status === 204, 'cleanup reportes de vision (via service role)')
 }
 
 async function checkMatching() {
@@ -253,11 +272,11 @@ async function main() {
   console.log(`Pawlink smoke test → ${BASE}`)
   console.log(hasServiceAccess ? 'Service role: disponible (checks completos)' : 'Service role: NO disponible — se saltan solicitudes y cleanups directos')
 
-  const { shelterId, seedReportIds } = await checkReads()
+  const { shelterId } = await checkReads()
   await checkAnimalLifecycle(shelterId)
   await checkAdoptionLifecycle(shelterId)
   await checkLostFoundLifecycle()
-  await checkVision(seedReportIds)
+  await checkVision()
   if (RUN_MATCHING) await checkMatching()
   else skip('POST /api/matching', 'usa --matching para incluirlo (consume tokens de Groq)')
 
