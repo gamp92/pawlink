@@ -68,7 +68,9 @@ Actualizado: 2026-07-03
 - [x] `POST /api/vision` — comparación de fotos con AWS Rekognition
   - [x] Reescrito 2026-07-07: el código original usaba `CompareFaces` (solo caras humanas) y mandaba URLs (Rekognition exige bytes) — nunca habría funcionado. Ahora usa `DetectLabels` en ambas fotos + similitud ponderada de etiquetas (raza/color), con corto-circuito a 0 si las especies no coinciden. Verificado: mismo perro → 100/match, perro vs gato → 0
 - [x] Cuenta AWS creada + credenciales verificadas contra Rekognition (2026-07-07, usuario IAM `pawlink-rekognition` con ReadOnly, región us-east-1)
-- [ ] Poner `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` en Vercel (Settings → Environment Variables) para que /api/vision funcione en producción
+- [x] Variables AWS configuradas en Vercel + redeploy (2026-07-07). Verificado en producción: misma foto → confidence 100/match ✓. **F3 completo end-to-end** 🎉
+- [x] Guard SSRF en /api/vision (2026-07-07): photo_urls son input público → allowlist de hosts (Storage de Supabase + Unsplash), HTTPS obligatorio, sin redirects, tope 5MB. Host no permitido → 422
+- [x] Reportes del seed ahora tienen fotos según especie (seed.py actualizado + filas vivas corregidas 2026-07-08) — el mapa se ve bien en el demo y vision es demoable con datos reales
 - [x] Testing con datos reales del seed — smoke-test completo contra producción 2026-07-06 (ver nota al final)
 
 ---

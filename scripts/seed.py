@@ -378,6 +378,7 @@ def seed_lost_found() -> None:
     for r in LOST_FOUND_DATA:
         lat, lng = r.pop("lat"), r.pop("lng")
         notes = r.pop("notes")
+        photos = DOG_PHOTOS if r["species"] == "dog" else CAT_PHOTOS
         supabase.table("lost_found_reports").insert({
             "report_type": r["type"],
             "pet_name": r["name"],
@@ -388,7 +389,8 @@ def seed_lost_found() -> None:
             "location": f"POINT({lng} {lat})",
             "location_notes": notes,
             "city": r["city"],
-            "photo_urls": [],
+            # Real photo so the map UI has images and /api/vision is demoable
+            "photo_urls": [random.choice(photos)],
         }).execute()
     print(f"  ✓ 10 lost/found reports inserted")
 
