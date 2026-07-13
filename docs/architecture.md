@@ -27,7 +27,6 @@ flowchart TB
             apiCrud["animals · shelters ·<br/>adoption-requests · lost-found"]
             apiMatching["matching"]
             apiVision["vision"]
-            apiRag["rag (F4, stretch)"]
         end
     end
 
@@ -61,7 +60,6 @@ flowchart TB
     api --> db
     api --> storage
     apiMatching --> groq
-    apiRag --> groq
     apiVision --> rekognition
 
     db --> webhooks
@@ -82,7 +80,7 @@ Key boundaries:
 
 ## 2. Data model
 
-Simplified view of `schema.sql` (see the file for full columns, constraints, and RLS policies). F4 tables (`shelter_documents`, `document_chunks`) are commented out in the schema until the stretch feature is built.
+Simplified view of `schema.sql` (see the file for full columns, constraints, and RLS policies).
 
 ```mermaid
 erDiagram
@@ -140,7 +138,7 @@ sequenceDiagram
     participant Groq as Groq (Llama 3)
     participant Resend as Resend
 
-    rect rgb(235, 244, 255)
+    rect rgba(128, 128, 128, 0.12)
         Note over DB,Resend: social-post — INSERT into animals
         DB->>WH: INSERT animals
         WH->>EF: invoke social-post
@@ -149,7 +147,7 @@ sequenceDiagram
         EF->>DB: save to animals.social_post
     end
 
-    rect rgb(235, 255, 240)
+    rect rgba(128, 128, 128, 0.05)
         Note over DB,Resend: geo-alert — INSERT into lost_found_reports
         DB->>WH: INSERT lost_found_reports
         WH->>EF: invoke geo-alert
@@ -158,7 +156,7 @@ sequenceDiagram
         EF->>Resend: email alerts to each user
     end
 
-    rect rgb(255, 245, 235)
+    rect rgba(128, 128, 128, 0.12)
         Note over DB,Resend: adoption-confirmation — UPDATE adoption_requests → approved
         DB->>WH: UPDATE status = approved
         WH->>EF: invoke adoption-confirmation
@@ -166,31 +164,3 @@ sequenceDiagram
     end
 ```
 
----
-
-## 4. RAG pipeline (F4 — stretch)
-
-Only built if F1–F3 are done ahead of schedule. Contracts in [`api-contracts/f4-rag-assistant.md`](./api-contracts/f4-rag-assistant.md). The assistant answers **only** from the shelter's own documents — if the answer is not in the retrieved chunks, it must say so.
-
-### Ingestion — once per document (Supabase Edge Function, 150s limit)
-
-```mermaid
-flowchart LR
-    pdf["PDF uploaded<br/>by shelter"] --> extract["PyMuPDF<br/>text extraction"]
-    extract --> chunk["Semantic chunking<br/>~500 tokens,<br/>50-token overlap"]
-    chunk --> embed["sentence-transformers<br/>all-MiniLM-L6-v2<br/>(local, 384 dims)"]
-    embed --> store[("pgvector<br/>VECTOR(384)<br/>tagged with shelter_id")]
-```
-
-### Query — every user question (Vercel Function `/api/rag`, 10s limit)
-
-```mermaid
-flowchart LR
-    q["User question<br/>(chat widget on /shelter/[id])"] --> qembed["Embed with<br/>all-MiniLM-L6-v2"]
-    qembed --> search[("pgvector similarity<br/>top 4 chunks,<br/>filtered by shelter_id")]
-    search --> chain["LangChain LCEL:<br/>question + chunks"]
-    chain --> llm["Groq Llama 3 8B"]
-    llm --> stream["StreamingResponse<br/>+ source citation"]
-```
-
-Both sides use the **same embedding model** — query vectors and document vectors must live in the same 384-dim space.
