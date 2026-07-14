@@ -328,6 +328,11 @@ as $$
   order by distance_m asc;
 $$;
 
+-- Defense-in-depth: the RPC returns subscriber emails + unsubscribe tokens.
+-- SECURITY INVOKER + RLS already blanks it for anon, but don't rely on that alone.
+revoke execute on function get_users_near_report(uuid, float) from public, anon, authenticated;
+grant execute on function get_users_near_report(uuid, float) to service_role;
+
 -- Edge Functions call get_users_near_report via PostgREST as service_role,
 -- which lacks SELECT on auth schema tables by default (error 42501).
 grant select on auth.users to service_role;
