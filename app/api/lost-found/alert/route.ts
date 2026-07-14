@@ -27,8 +27,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  // Never expose unsubscribe tokens on a public endpoint — only the
+  // geo-alert Edge Function may use them (inside the emails it sends).
+  const alertedUsers = (data ?? []).map(
+    ({ subscription_id, email, distance_m }: { subscription_id: string; email: string; distance_m: number }) =>
+      ({ subscription_id, email, distance_m })
+  )
+
   return NextResponse.json(
-    { alerted_users: data ?? [], total: data?.length ?? 0 },
+    { alerted_users: alertedUsers, total: alertedUsers.length },
     { status: 200 }
   )
 }
