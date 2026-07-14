@@ -87,36 +87,16 @@ create index animals_species_idx on animals(species);
 
 
 -- ============================================================
--- FAMILY PROFILES + ADOPTION REQUESTS
+-- ADOPTION REQUESTS
 -- F2 — Smart Adoption
 -- ============================================================
 
--- Registered public users (families)
-create table family_profiles (
-  id              uuid primary key default gen_random_uuid(),
-  user_id         uuid references auth.users(id) on delete cascade,
-  full_name       text,
-  email           text,
-  phone           text,
-  location        geography(point, 4326),      -- for geo-alerts (Lost & Found)
-  city            text,
-  -- Questionnaire answers (stored for matching history)
-  living_space    text,                        -- 'apartment' | 'house_no_yard' | 'house_yard'
-  lifestyle       text,                        -- 'sedentary' | 'moderate' | 'active'
-  experience      text,                        -- 'none' | 'some' | 'experienced'
-  has_other_pets  boolean default false,
-  has_children    boolean default false,
-  created_at      timestamptz default now(),
-  updated_at      timestamptz default now()
-);
-
--- Adoption requests from families to shelters
+-- Adoption requests (no account — contact travels inline)
 create table adoption_requests (
   id              uuid primary key default gen_random_uuid(),
   animal_id       uuid references animals(id) on delete cascade,
   shelter_id      uuid references shelters(id) on delete cascade,
-  family_id       uuid references family_profiles(id) on delete cascade,
-  -- Adopter contact (no account needed — replaces the family_profiles join)
+  -- Adopter contact (no account needed)
   full_name       text,
   email           text,
   phone           text,
@@ -163,19 +143,6 @@ create table alert_subscriptions (
 create index alert_subscriptions_location_idx
   on alert_subscriptions using gist(location);
 
--- No policies on purpose: only the service role touches this table.
-alter table alert_subscriptions enable row level security;
-
-
--- One-time backfill (2026-07-13): carried the seeded geo users over from
--- family_profiles. Idempotent via on conflict; phase 2 removes it together
--- with family_profiles.
-insert into alert_subscriptions (email, full_name, city, location, created_at)
-select email, full_name, city, location, created_at
-from family_profiles
-where email is not null and location is not null
-on conflict (email) do nothing;
-
 
 -- ============================================================
 -- LOST & FOUND REPORTS
@@ -216,12 +183,14 @@ create index lost_found_reports_type_idx
 -- Enforces multi-tenancy at the database level
 -- ============================================================
 
-alter table shelters           enable row level security;
-alter table shelter_users      enable row level security;
-alter table animals            enable row level security;
-alter table family_profiles    enable row level security;
-alter table adoption_requests  enable row level security;
-alter table lost_found_reports enable row level security;
+alter table shelters            enable row level security;
+alter table shelter_users       enable row level security;
+alter table animals             enable row level security;
+alter table adoption_requests   enable row level security;
+alter table lost_found_reports  enable row level security;
+-- No policies on purpose for alert_subscriptions: only the service role
+-- touches it (emails + unsubscribe tokens must never be anon-readable).
+alter table alert_subscriptions enable row level security;
 
 -- Shelters: public read, shelter admin write
 create policy "shelters_public_read"
@@ -262,22 +231,7 @@ create policy "animals_shelter_write"
     )
   );
 
--- Family profiles: user owns their own profile
-create policy "family_profiles_own"
-  on family_profiles for all
-  using (user_id = auth.uid());
-
--- Adoption requests: family sees own, shelter sees theirs
-create policy "adoption_requests_family_read"
-  on adoption_requests for select
-  using (
-    exists (
-      select 1 from family_profiles
-      where family_profiles.id = adoption_requests.family_id
-      and family_profiles.user_id = auth.uid()
-    )
-  );
-
+-- Adoption requests: created via service role (public API), shelter sees theirs
 create policy "adoption_requests_shelter_all"
   on adoption_requests for all
   using (
@@ -285,16 +239,6 @@ create policy "adoption_requests_shelter_all"
       select 1 from shelter_users
       where shelter_users.shelter_id = adoption_requests.shelter_id
       and shelter_users.user_id = auth.uid()
-    )
-  );
-
-create policy "adoption_requests_family_insert"
-  on adoption_requests for insert
-  with check (
-    exists (
-      select 1 from family_profiles
-      where family_profiles.id = adoption_requests.family_id
-      and family_profiles.user_id = auth.uid()
     )
   );
 
@@ -342,10 +286,6 @@ $$;
 -- SECURITY INVOKER + RLS already blanks it for anon, but don't rely on that alone.
 revoke execute on function get_users_near_report(uuid, float) from public, anon, authenticated;
 grant execute on function get_users_near_report(uuid, float) to service_role;
-
--- Edge Functions call get_users_near_report via PostgREST as service_role,
--- which lacks SELECT on auth schema tables by default (error 42501).
-grant select on auth.users to service_role;
 
 
 -- ============================================================
