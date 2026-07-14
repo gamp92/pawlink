@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { redirect } from 'next/navigation'
+import { ShelterWorkspaceProvider } from '@/components/shelter/ShelterWorkspaceContext'
 import { createServerClient, createSupabaseServerClient } from '@/lib/supabase/server'
 
 type ShelterLayoutProps = {
@@ -44,8 +45,18 @@ export default async function ShelterLayout({ children }: ShelterLayoutProps) {
     )
   }
 
+  const linkedShelter = shelterUser.shelters as { name?: string } | { name?: string }[] | null
+  const shelterName =
+    Array.isArray(linkedShelter)
+      ? linkedShelter[0]?.name
+      : linkedShelter?.name
+
   return (
-    <div>
+    <ShelterWorkspaceProvider
+      shelterId={shelterUser.shelter_id}
+      shelterName={shelterName ?? 'Shelter workspace'}
+      userEmail={user.email ?? 'Signed in shelter user'}
+    >
       <header className="border-b border-slate-200 bg-white px-4 py-2 text-slate-950">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
           <div>
@@ -60,7 +71,7 @@ export default async function ShelterLayout({ children }: ShelterLayoutProps) {
         </div>
       </header>
       {children}
-    </div>
+    </ShelterWorkspaceProvider>
   )
 }
 

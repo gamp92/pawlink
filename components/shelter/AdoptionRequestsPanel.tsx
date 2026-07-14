@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ActionBar } from '@/components/shared/ActionBar'
 import { Avatar } from '@/components/shared/Avatar'
 import { Badge } from '@/components/shared/Badge'
@@ -8,10 +8,14 @@ import { BottomSheet } from '@/components/shared/BottomSheet'
 import { Button } from '@/components/shared/Button'
 import { DashboardCard } from '@/components/shared/DashboardCard'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { ErrorState } from '@/components/shared/ErrorState'
+import { LoadingState } from '@/components/shared/LoadingState'
 import { SectionTitle } from '@/components/shared/SectionTitle'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ShelterHubLayout } from '@/components/shelter/ShelterHubLayout'
-import { adoptionRequests as initialRequests, type AdoptionRequest } from '@/lib/mock-data'
+import { useShelterWorkspace } from '@/components/shelter/ShelterWorkspaceContext'
+import { useAdoptionRequests } from '@/components/shelter/hooks/useAdoptionRequests'
+import type { AdoptionRequest } from '@/lib/mock-data'
 
 type RequestStatus = AdoptionRequest['status']
 
@@ -23,24 +27,36 @@ const requestTone: Record<RequestStatus, 'purple' | 'teal' | 'red' | 'slate' | '
 }
 
 export function AdoptionRequestsPanel() {
-  const [requests, setRequests] = useState<AdoptionRequest[]>(initialRequests)
-  const [selectedId, setSelectedId] = useState(initialRequests[0]?.id ?? '')
+  const { shelterId } = useShelterWorkspace()
+  const {
+    data: requests,
+    isLoading,
+    error,
+    mutationError,
+    isFallback,
+    isEmpty,
+    pendingRequestIds,
+    updateRequestStatus,
+  } = useAdoptionRequests({ shelterId })
+  const [selectedId, setSelectedId] = useState('')
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const selectedRequest = requests.find((request) => request.id === selectedId) ?? requests[0]
 
+  useEffect(() => {
+    if (!requests.length) {
+      setSelectedId('')
+      return
+    }
+
+    if (!selectedId || !requests.some((request) => request.id === selectedId)) {
+      setSelectedId(requests[0].id)
+    }
+  }, [requests, selectedId])
+
   function updateRequest(status: RequestStatus) {
     if (!selectedRequest) return
-    setRequests((current) =>
-      current.map((request) =>
-        request.id === selectedRequest.id
-          ? {
-              ...request,
-              status,
-              notes: status === 'approved' ? 'Approved in mock review.' : 'Rejected in mock review.',
-            }
-          : request,
-      ),
-    )
+    const notes = status === 'approved' ? 'Approved in shelter review.' : 'Rejected in shelter review.'
+    updateRequestStatus(selectedRequest.id, { status, notes })
   }
 
   return (
@@ -58,6 +74,25 @@ export function AdoptionRequestsPanel() {
               description="Newest requests appear first with compatibility and household signals."
             />
           </DashboardCard>
+
+          {isLoading ? (
+            <div className="mt-4">
+              <LoadingState label="Loading adoption requests" />
+            </div>
+          ) : null}
+          {error ? (
+            <div className="mt-4">
+              <ErrorState
+                title={isFallback ? 'Using fallback requests' : 'Request data issue'}
+                description={error}
+              />
+            </div>
+          ) : null}
+          {mutationError ? (
+            <div className="mt-4">
+              <ErrorState title="Update rolled back" description={mutationError} />
+            </div>
+          ) : null}
 
           <div className="mt-4 space-y-3">
             {requests.map((request) => (
@@ -98,7 +133,14 @@ export function AdoptionRequestsPanel() {
 
           {requests.length === 0 ? (
             <div className="mt-4">
-              <EmptyState title="No adoption requests yet" description="New family applications will appear here." />
+              <EmptyState
+                title="No adoption requests yet"
+                description={
+                  isEmpty
+                    ? 'This shelter has no family applications yet.'
+                    : 'New family applications will appear here.'
+                }
+              />
             </div>
           ) : null}
         </section>
@@ -156,10 +198,19 @@ export function AdoptionRequestsPanel() {
               ) : null}
 
               <ActionBar className="mt-4 rounded-2xl">
-                <Button onClick={() => updateRequest('approved')} fullWidth>
+                <Button
+                  onClick={() => updateRequest('approved')}
+                  fullWidth
+                  disabled={pendingRequestIds.has(selectedRequest.id)}
+                >
                   Approve
                 </Button>
-                <Button onClick={() => updateRequest('rejected')} variant="danger" fullWidth>
+                <Button
+                  onClick={() => updateRequest('rejected')}
+                  variant="danger"
+                  fullWidth
+                  disabled={pendingRequestIds.has(selectedRequest.id)}
+                >
                   Reject
                 </Button>
               </ActionBar>

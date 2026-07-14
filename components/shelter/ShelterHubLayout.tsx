@@ -1,5 +1,8 @@
+'use client'
+
 import type { ReactNode } from 'react'
 import { Badge } from '@/components/shared/Badge'
+import { useShelterWorkspace } from '@/components/shelter/ShelterWorkspaceContext'
 
 type ShelterHubLayoutProps = {
   active: 'Dashboard' | 'Animals' | 'Requests' | 'Documents'
@@ -17,16 +20,24 @@ const navItems = [
 ] as const
 
 export function ShelterHubLayout({ active, title, subtitle, action, children }: ShelterHubLayoutProps) {
+  const { shelterName, userEmail } = useShelterWorkspace()
+  const initials = shelterName
+    .split(' ')
+    .map((word) => word[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+
   return (
     <div className="grid gap-4 md:grid-cols-[220px_1fr]">
       <aside className="md:sticky md:top-4 md:self-start">
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="rounded-2xl bg-gradient-to-br from-violet-50 to-teal-50 p-4">
             <div className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-600 text-xs font-black text-white shadow-sm">
-              RP
+              {initials}
             </div>
-            <p className="mt-3 text-sm font-black tracking-tight text-slate-950">Refugio Patitas</p>
-            <p className="mt-1 text-[11px] font-semibold text-slate-500">Shelter workspace</p>
+            <p className="mt-3 text-sm font-black tracking-tight text-slate-950">{shelterName}</p>
+            <p className="mt-1 text-[11px] font-semibold text-slate-500">{userEmail}</p>
           </div>
 
           <nav className="mt-3 hidden space-y-2 md:block">
