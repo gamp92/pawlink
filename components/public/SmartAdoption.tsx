@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { StatusBadge } from '@/components/shared/StatusBadge'
+import { AdoptionApplicationFlow } from '@/components/public/adoption/AdoptionApplicationFlow'
 import { animals as mockAnimals, type Animal, type Species } from '@/lib/mock-data'
 
 type LivingSpace = 'apartment' | 'house_no_yard' | 'house_yard'
@@ -255,7 +256,7 @@ export function SmartAdoption() {
   const [filters, setFilters] = useState<Filters>(initialFilters)
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState(fallbackAvailableAnimals[0]?.id ?? '')
-  const [requestedAnimalId, setRequestedAnimalId] = useState<string | null>(null)
+  const [isApplicationOpen, setIsApplicationOpen] = useState(false)
   const [isProfileOpen, setIsProfileOpen] = useState(true)
   const [openSection, setOpenSection] = useState<ProfileSection>('home')
 
@@ -316,7 +317,6 @@ export function SmartAdoption() {
   useEffect(() => {
     if (!matchResults.some((result) => result.animal.id === selectedId)) {
       setSelectedId(matchResults[0]?.animal.id ?? '')
-      setRequestedAnimalId(null)
     }
   }, [matchResults, selectedId])
 
@@ -324,17 +324,15 @@ export function SmartAdoption() {
 
   function updateProfile<Key extends keyof FamilyProfile>(key: Key, value: FamilyProfile[Key]) {
     setProfile((current) => ({ ...current, [key]: value }))
-    setRequestedAnimalId(null)
   }
 
   function applyFilter(update: (current: Filters) => Filters) {
     setFilters((current) => update(current))
-    setRequestedAnimalId(null)
   }
 
   function requestSelectedAnimal() {
     if (!selectedMatch) return
-    setRequestedAnimalId(selectedMatch.animal.id)
+    setIsApplicationOpen(true)
   }
 
   return (
@@ -520,7 +518,6 @@ export function SmartAdoption() {
                 key={result.animal.id}
                 onClick={() => {
                   setSelectedId(result.animal.id)
-                  setRequestedAnimalId(null)
                 }}
                 className="text-left"
               >
@@ -533,7 +530,6 @@ export function SmartAdoption() {
         <aside className="hidden md:block">
           <DetailPanel
             match={selectedMatch}
-            requestedAnimalId={requestedAnimalId}
             onRequest={requestSelectedAnimal}
           />
         </aside>
@@ -550,30 +546,28 @@ export function SmartAdoption() {
               <StatusBadge label={selectedMatch.animal.species} tone="teal" />
             </div>
             <div className="mt-3">
-              {requestedAnimalId === selectedMatch.animal.id ? (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-700">
-                  Request submitted. The shelter will contact you soon.
-                </div>
-              ) : (
-                <Button onClick={requestSelectedAnimal} fullWidth>
-                  Request Adoption
-                </Button>
-              )}
+              <Button onClick={requestSelectedAnimal} fullWidth>
+                Request Adoption
+              </Button>
             </div>
           </div>
         </div>
       ) : null}
+
+      <AdoptionApplicationFlow
+        match={selectedMatch ?? null}
+        open={isApplicationOpen}
+        onClose={() => setIsApplicationOpen(false)}
+      />
     </div>
   )
 }
 
 function DetailPanel({
   match,
-  requestedAnimalId,
   onRequest,
 }: {
   match?: MatchResult
-  requestedAnimalId: string | null
   onRequest: () => void
 }) {
   if (!match) {
@@ -617,15 +611,9 @@ function DetailPanel({
       </div>
 
       <div className="mt-4">
-        {requestedAnimalId === match.animal.id ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-700">
-            Request submitted. The shelter will contact you soon.
-          </div>
-        ) : (
-          <Button onClick={onRequest} fullWidth>
-            Request Adoption
-          </Button>
-        )}
+        <Button onClick={onRequest} fullWidth>
+          Request Adoption
+        </Button>
       </div>
     </Card>
   )
