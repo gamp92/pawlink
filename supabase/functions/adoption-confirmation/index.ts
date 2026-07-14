@@ -24,20 +24,18 @@ Deno.serve(async (req: Request) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   )
 
-  // Fetch animal, shelter and family details
-  const [animalResult, shelterResult, familyResult] = await Promise.all([
+  // Contact info lives on the request row itself — no family_profiles table
+  if (!request.email) {
+    return new Response(JSON.stringify({ error: 'Request has no contact email' }), { status: 422 })
+  }
+
+  const [animalResult, shelterResult] = await Promise.all([
     supabase.from('animals').select('name, species, photo_urls').eq('id', request.animal_id).single(),
     supabase.from('shelters').select('name, phone, email').eq('id', request.shelter_id).single(),
-    supabase.from('family_profiles').select('full_name, email').eq('id', request.family_id).single(),
   ])
-
-  if (!familyResult.data?.email) {
-    return new Response(JSON.stringify({ error: 'Family email not found' }), { status: 404 })
-  }
 
   const animal = animalResult.data
   const shelter = shelterResult.data
-  const family = familyResult.data
   const species = animal?.species === 'dog' ? 'perro' : animal?.species === 'cat' ? 'gato' : 'mascota'
 
   const emailResponse = await fetch(RESEND_API_URL, {
@@ -48,10 +46,10 @@ Deno.serve(async (req: Request) => {
     },
     body: JSON.stringify({
       from: 'Pawlink <adopciones@pawlink.mx>',
-      to: family.email,
+      to: request.email,
       subject: `🎉 ¡Tu solicitud de adopción fue aprobada!`,
       html: `
-        <h2>¡Felicidades, ${family.full_name}!</h2>
+        <h2>¡Felicidades, ${request.full_name ?? ''}!</h2>
         <p>Tu solicitud para adoptar a <strong>${animal?.name}</strong> (${species}) fue <strong>aprobada</strong> por ${shelter?.name}.</p>
         <h3>Próximos pasos</h3>
         <p>El refugio se pondrá en contacto contigo pronto para coordinar la entrega.</p>
@@ -73,7 +71,7 @@ Deno.serve(async (req: Request) => {
   }
 
   return new Response(
-    JSON.stringify({ success: true, email_sent_to: family.email }),
+    JSON.stringify({ success: true, email_sent_to: request.email }),
     { status: 200 }
   )
 })
