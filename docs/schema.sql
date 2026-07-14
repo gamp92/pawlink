@@ -116,6 +116,10 @@ create table adoption_requests (
   animal_id       uuid references animals(id) on delete cascade,
   shelter_id      uuid references shelters(id) on delete cascade,
   family_id       uuid references family_profiles(id) on delete cascade,
+  -- Adopter contact (no account needed — replaces the family_profiles join)
+  full_name       text,
+  email           text,
+  phone           text,
   -- Snapshot of questionnaire at time of request
   living_space    text,
   lifestyle       text,
@@ -135,6 +139,32 @@ create table adoption_requests (
 create index adoption_requests_shelter_id_idx on adoption_requests(shelter_id);
 create index adoption_requests_animal_id_idx on adoption_requests(animal_id);
 create index adoption_requests_status_idx on adoption_requests(status);
+
+create unique index adoption_requests_pending_dedupe
+  on adoption_requests (animal_id, lower(email))
+  where status = 'pending';
+
+
+-- ============================================================
+-- GEO-ALERT SUBSCRIBERS (Lost & Found)
+-- No account, opt-in by email + map point
+-- ============================================================
+
+create table alert_subscriptions (
+  id                uuid primary key default gen_random_uuid(),
+  email             text not null unique,
+  full_name         text,
+  city              text,
+  location          geography(point, 4326) not null,
+  unsubscribe_token uuid not null unique default gen_random_uuid(),
+  created_at        timestamptz default now()
+);
+
+create index alert_subscriptions_location_idx
+  on alert_subscriptions using gist(location);
+
+-- No policies on purpose: only the service role touches this table.
+alter table alert_subscriptions enable row level security;
 
 
 -- ============================================================
@@ -273,27 +303,28 @@ create policy "lost_found_reporter_update"
 -- ============================================================
 -- HELPER FUNCTION — PostGIS radius query for geo-alerts
 -- Called by N8N when a new lost_found_report is created
--- Returns user_ids of family_profiles within X meters
+-- Returns subscribers from alert_subscriptions within X meters
 -- ============================================================
 
-create or replace function get_users_near_report(
-  report_id   uuid,
-  radius_m    float default 2000        -- default 2km
+-- Return shape changes (user_id → subscription_id + unsubscribe_token): drop + recreate
+drop function if exists get_users_near_report(uuid, float);
+
+create function get_users_near_report(
+  report_id uuid,
+  radius_m  float default 2000
 )
-returns table(user_id uuid, email text, distance_m float)
+returns table(subscription_id uuid, email text, distance_m float, unsubscribe_token uuid)
 language sql
 as $$
   select
-    fp.user_id,
-    au.email,
-    ST_Distance(fp.location, r.location)::float as distance_m
+    s.id,
+    s.email,
+    ST_Distance(s.location, r.location)::float as distance_m,
+    s.unsubscribe_token
   from lost_found_reports r
-  join family_profiles fp
-    on ST_DWithin(fp.location, r.location, radius_m)
-  join auth.users au
-    on au.id = fp.user_id
+  join alert_subscriptions s
+    on ST_DWithin(s.location, r.location, radius_m)
   where r.id = report_id
-  and fp.user_id is distinct from r.reporter_id   -- don't alert the reporter (NULL-safe: reporter_id is null for anonymous reports)
   order by distance_m asc;
 $$;
 
