@@ -217,13 +217,13 @@ export function AdoptionApplicationFlow({
   const stepProps = { form, errors, updateField }
 
   return (
-    <div className="fixed inset-0 z-50 bg-white md:grid md:place-items-center md:bg-slate-950/50 md:p-6">
-      <section className="flex h-full flex-col bg-white md:h-auto md:max-h-[90vh] md:w-full md:max-w-3xl md:overflow-hidden md:rounded-3xl md:border md:border-slate-200 md:shadow-2xl">
-        <div className="border-b border-slate-200 p-4">
-          <div className="flex items-start justify-between gap-3">
+    <div className="fixed inset-0 z-50 bg-slate-50 md:grid md:place-items-center md:bg-slate-950/50 md:p-6">
+      <section className="flex h-full flex-col bg-slate-50 md:h-auto md:max-h-[92vh] md:w-full md:max-w-4xl md:overflow-hidden md:rounded-[2rem] md:border md:border-white/70 md:bg-white md:shadow-2xl">
+        <div className="border-b border-slate-200/70 bg-white/90 p-4 backdrop-blur md:p-5">
+          <div className="mx-auto flex max-w-3xl items-start justify-between gap-3">
             <div>
-              <p className="text-[11px] font-black uppercase tracking-wide text-violet-600">Adoption application</p>
-              <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
+              <p className="text-xs font-black text-violet-600">Adoption application</p>
+              <h2 className="mt-1 text-3xl font-black tracking-tight text-slate-950">
                 {result ? 'Application received' : stepTitles[step]}
               </h2>
               <p className="mt-1 text-sm leading-6 text-slate-500">
@@ -235,24 +235,26 @@ export function AdoptionApplicationFlow({
             <button
               type="button"
               onClick={closeAndReset}
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-slate-200 bg-white text-sm font-black text-slate-500"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-slate-200 bg-white text-sm font-black text-slate-500 shadow-sm transition hover:border-violet-200 hover:text-violet-700 focus:outline-none focus:ring-4 focus:ring-violet-100"
               aria-label="Close adoption application"
             >
               x
             </button>
           </div>
           {!result ? (
-            <div className="mt-4">
+            <div className="mx-auto mt-4 max-w-3xl">
               <QuestionnaireProgress currentStep={step} onSelectStep={setStep} />
             </div>
           ) : null}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6">
           {result ? (
-            <ApplicationSuccess match={activeMatch} result={result} onClose={closeAndReset} />
+            <div className="mx-auto max-w-2xl">
+              <ApplicationSuccess match={activeMatch} result={result} onClose={closeAndReset} />
+            </div>
           ) : (
-            <div className="space-y-4">
+            <div className="mx-auto max-w-3xl space-y-4 transition duration-300">
               <SelectedPetSummary match={activeMatch} compact={step !== 'review'} />
               {step === 'contact' ? <ContactInformationStep {...stepProps} /> : null}
               {step === 'household' ? <HouseholdStep {...stepProps} /> : null}
@@ -267,8 +269,8 @@ export function AdoptionApplicationFlow({
         </div>
 
         {!result ? (
-          <div className="border-t border-slate-200 bg-white p-4">
-            <div className="flex gap-3">
+          <div className="border-t border-slate-200/70 bg-white/95 p-4 shadow-[0_-12px_30px_rgba(15,23,42,0.04)] backdrop-blur">
+            <div className="mx-auto flex max-w-3xl gap-3">
               <Button
                 type="button"
                 variant="secondary"

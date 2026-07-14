@@ -1,25 +1,23 @@
-import type { AdoptionApplicationStep } from '@/components/public/adoption/types'
+type ProgressStep<StepId extends string> = {
+  id: StepId
+  label: string
+  description?: string
+}
 
-const steps: Array<{ id: AdoptionApplicationStep; label: string; description: string }> = [
-  { id: 'contact', label: 'Contact', description: 'How the shelter reaches you' },
-  { id: 'household', label: 'Home', description: 'Space and family context' },
-  { id: 'lifestyle', label: 'Lifestyle', description: 'Daily rhythm and care' },
-  { id: 'intent', label: 'Intent', description: 'Why adoption fits now' },
-  { id: 'review', label: 'Review', description: 'Check everything once' },
-]
-
-export function QuestionnaireProgress({
+export function FlowProgress<StepId extends string>({
+  steps,
   currentStep,
   onSelectStep,
 }: {
-  currentStep: AdoptionApplicationStep
-  onSelectStep: (step: AdoptionApplicationStep) => void
+  steps: Array<ProgressStep<StepId>>
+  currentStep: StepId
+  onSelectStep: (step: StepId) => void
 }) {
   const currentIndex = steps.findIndex((step) => step.id === currentStep)
 
   return (
-    <div aria-label="Application progress" className="overflow-x-auto pb-1">
-      <div className="flex min-w-[680px] items-start">
+    <div className="overflow-x-auto pb-1" aria-label="Form progress">
+      <div className="flex min-w-[640px] items-start">
         {steps.map((step, index) => {
           const isCurrent = step.id === currentStep
           const isComplete = index < currentIndex
@@ -46,7 +44,9 @@ export function QuestionnaireProgress({
                   <span className={`block text-sm font-black ${isCurrent ? 'text-slate-950' : 'text-slate-600'}`}>
                     {step.label}
                   </span>
-                  <span className="mt-0.5 block text-xs leading-4 text-slate-500">{step.description}</span>
+                  {step.description ? (
+                    <span className="mt-0.5 block text-xs leading-4 text-slate-500">{step.description}</span>
+                  ) : null}
                 </span>
               </button>
               {index < steps.length - 1 ? (
@@ -59,5 +59,3 @@ export function QuestionnaireProgress({
     </div>
   )
 }
-
-export const adoptionApplicationSteps = steps

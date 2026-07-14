@@ -7,6 +7,8 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { reportTypeTone, StatusBadge } from '@/components/shared/StatusBadge'
+import { AlertSubscriptionFlow } from '@/components/public/lost-found/AlertSubscriptionFlow'
+import { ReportPetFlow } from '@/components/public/lost-found/ReportPetFlow'
 import {
   lostFoundReports,
   type LostFoundReport,
@@ -15,15 +17,6 @@ import {
 } from '@/lib/mock-data'
 
 type ReportFilter = 'all' | ReportType
-type ReportForm = {
-  report_type: ReportType
-  pet_name: string
-  species: Species
-  breed: string
-  color: string
-  description: string
-  location_notes: string
-}
 
 type ApiLostFoundReport = {
   id: string
@@ -41,16 +34,6 @@ type ApiLostFoundReport = {
   matched_report_id: string | null
   match_confidence: number | null
   created_at: string
-}
-
-const initialForm: ReportForm = {
-  report_type: 'lost',
-  pet_name: '',
-  species: 'dog',
-  breed: '',
-  color: '',
-  description: '',
-  location_notes: 'Near Parque Mexico, Condesa',
 }
 
 const markerPositions = [
@@ -91,6 +74,10 @@ function formatDate(value: string) {
   return value.slice(0, 10)
 }
 
+function timeAgoFor(index: number) {
+  return index === 0 ? 'Today' : index === 1 ? 'Yesterday' : `${index + 1}d ago`
+}
+
 function distanceFor(index: number) {
   return `${(0.7 + index * 0.4).toFixed(1)} km away`
 }
@@ -108,8 +95,8 @@ export function LostFoundBoard() {
   const [isUsingFallback, setIsUsingFallback] = useState(false)
   const [filter, setFilter] = useState<ReportFilter>('all')
   const [selectedId, setSelectedId] = useState(lostFoundReports[0]?.id ?? '')
-  const [isFormOpen, setIsFormOpen] = useState(false)
-  const [form, setForm] = useState<ReportForm>(initialForm)
+  const [isReportFlowOpen, setIsReportFlowOpen] = useState(false)
+  const [isAlertFlowOpen, setIsAlertFlowOpen] = useState(false)
   const [notifiedReportId, setNotifiedReportId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -174,44 +161,13 @@ export function LostFoundBoard() {
     setNotifiedReportId(null)
   }
 
-  function updateForm<Key extends keyof ReportForm>(key: Key, value: ReportForm[Key]) {
-    setForm((current) => ({ ...current, [key]: value }))
-  }
-
-  function submitReport() {
-    const newReport: LostFoundReport = {
-      id: `report-local-${reports.length + 1}`,
-      report_type: form.report_type,
-      pet_name: form.pet_name.trim() || (form.report_type === 'found' ? 'Unknown pet' : 'Unnamed pet'),
-      species: form.species,
-      breed: form.breed.trim() || 'Mixed',
-      color: form.color.trim() || 'unknown',
-      description: form.description.trim() || 'Reported from the public Lost & Found form.',
-      photo_urls: [''],
-      location: { lat: 19.4133, lng: -99.1718 },
-      location_notes: form.location_notes.trim() || 'Pinned on mock map',
-      city: 'CDMX',
-      status: 'open',
-      matched_report_id: null,
-      match_confidence: null,
-      created_at: '2025-06-14T00:00:00Z',
-    }
-
-    setReports((current) => [newReport, ...current])
-    setSelectedId(newReport.id)
-    setFilter(newReport.report_type)
-    setForm(initialForm)
-    setIsFormOpen(false)
-    setNotifiedReportId(null)
-  }
-
   return (
     <div className="pb-20 md:pb-0">
-      <div className="grid gap-5 md:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.9fr)]">
         <section className="min-w-0">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-xl font-black tracking-tight text-slate-950">Nearby pet reports</h2>
+              <h2 className="text-2xl font-black tracking-tight text-slate-950">Nearby pet reports</h2>
               <p className="mt-1 text-sm leading-6 text-slate-500">
                 Explore open lost and found reports around the community.
               </p>
@@ -223,7 +179,7 @@ export function LostFoundBoard() {
             </div>
           </div>
 
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex gap-2 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
             {[
               ['all', 'All'],
               ['lost', 'Lost'],
@@ -245,14 +201,17 @@ export function LostFoundBoard() {
             </div>
           ) : null}
 
-          <div className="relative mt-4 min-h-[320px] overflow-hidden rounded-2xl border border-teal-100 bg-teal-50 shadow-sm">
+          <div className="relative mt-4 min-h-[460px] overflow-hidden rounded-[1.75rem] border border-teal-100 bg-teal-50 shadow-xl shadow-teal-100/60">
             <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(15,118,110,.12)_1px,transparent_1px),linear-gradient(rgba(15,118,110,.12)_1px,transparent_1px)] bg-[size:86px_86px]" />
-            <div className="absolute left-[22%] top-[22%] h-24 w-36 rounded bg-teal-100/60" />
-            <div className="absolute left-[18%] top-[28%] h-36 w-36 rounded-full border border-dashed border-rose-500" />
+            <div className="absolute left-[22%] top-[22%] h-24 w-36 rounded-3xl bg-teal-100/60 shadow-inner" />
+            <div className="absolute left-[58%] top-[18%] h-28 w-32 rounded-3xl bg-white/45" />
+            <div className="absolute left-[18%] top-[28%] h-40 w-40 rounded-full border border-dashed border-rose-500/80 bg-rose-50/20" />
+            <div className="absolute left-[42%] top-[8%] h-[84%] w-3 rounded-full bg-white/70" />
+            <div className="absolute left-[8%] top-[58%] h-3 w-[84%] rounded-full bg-white/70" />
 
             <Button
-              onClick={() => setIsFormOpen(true)}
-              className="absolute right-3 top-0"
+              onClick={() => setIsReportFlowOpen(true)}
+              className="absolute right-4 top-4 shadow-lg shadow-violet-200"
               size="sm"
             >
               Report Pet
@@ -265,33 +224,40 @@ export function LostFoundBoard() {
                 <button
                   key={report.id}
                   onClick={() => selectReport(report)}
-                  className={`absolute rounded-full border px-3 py-2 text-[11px] font-black shadow-sm ${
+                  className={`absolute rounded-full border px-3 py-2 text-[11px] font-black shadow-lg transition duration-300 hover:-translate-y-1 focus:outline-none focus:ring-4 focus:ring-violet-100 ${
                     isSelected
-                      ? 'border-violet-300 bg-violet-600 text-white'
-                      : 'border-white/60 bg-white/90 text-slate-700'
+                      ? 'scale-110 border-violet-300 bg-violet-600 text-white shadow-violet-300'
+                      : 'border-white/70 bg-white/95 text-slate-700 hover:border-violet-200'
                   }`}
                   style={position}
+                  aria-label={`Select ${report.report_type} report for ${report.pet_name}`}
                 >
-                  {report.report_type === 'lost' ? 'Lost' : 'Found'} - {speciesIcon[report.species]}
+                  <span className="mr-1">{report.report_type === 'lost' ? 'Lost' : 'Found'}</span>
+                  <span>{speciesIcon[report.species]}</span>
                 </button>
               )
             })}
 
-            <div className="absolute bottom-3 left-3 rounded-xl border border-white/60 bg-white/90 p-3 text-[11px] shadow-sm">
+            <div className="absolute bottom-4 left-4 rounded-2xl border border-white/70 bg-white/90 p-3 text-[11px] shadow-sm backdrop-blur">
               <div className="font-bold text-rose-600">Lost pet</div>
               <div className="mt-1 font-bold text-teal-600">Found pet</div>
             </div>
           </div>
 
-          <Card className="mt-4">
+          <Card className="mt-4 rounded-[1.5rem]">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-black text-slate-950">Open reports</h3>
                 <p className="mt-1 text-xs text-slate-500">Swipe through active community reports.</p>
               </div>
-              <Button onClick={() => setIsFormOpen(true)} size="sm" variant="secondary">
-                Report
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={() => setIsAlertFlowOpen(true)} size="sm" variant="secondary">
+                  Alerts
+                </Button>
+                <Button onClick={() => setIsReportFlowOpen(true)} size="sm" variant="secondary">
+                  Report
+                </Button>
+              </div>
             </div>
 
             {isLoading ? (
@@ -305,7 +271,7 @@ export function LostFoundBoard() {
                 <EmptyState
                   title="No active reports"
                   description="Try another filter or submit a report to help the community."
-                  action={<Button onClick={() => setIsFormOpen(true)}>Report Pet</Button>}
+                  action={<Button onClick={() => setIsReportFlowOpen(true)}>Report Pet</Button>}
                 />
               </div>
             ) : null}
@@ -316,6 +282,7 @@ export function LostFoundBoard() {
                   key={report.id}
                   report={report}
                   distance={distanceFor(index)}
+                  timeAgo={timeAgoFor(index)}
                   selected={selectedReport?.id === report.id}
                   onSelect={() => selectReport(report)}
                 />
@@ -324,7 +291,7 @@ export function LostFoundBoard() {
           </Card>
         </section>
 
-        <aside className="hidden md:block">
+        <aside className="hidden lg:block">
           <ReportDetail
             report={selectedReport}
             matchedReport={matchedReport}
@@ -348,95 +315,8 @@ export function LostFoundBoard() {
         </div>
       ) : null}
 
-      {isFormOpen ? (
-        <div className="fixed inset-0 z-40 bg-white p-4 md:grid md:place-items-center md:bg-slate-950/40">
-          <div className="mx-auto w-full max-w-[520px] rounded-2xl border border-slate-200 bg-white p-4 shadow-lg">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-wide text-violet-600">Community report</p>
-                <h3 className="mt-1 text-2xl font-black tracking-tight">Report a pet</h3>
-              </div>
-              <Button onClick={() => setIsFormOpen(false)} variant="secondary" size="sm">
-                Close
-              </Button>
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              {[
-                ['lost', 'Lost pet'],
-                ['found', 'Found pet'],
-              ].map(([value, label]) => (
-                <button
-                  key={value}
-                  onClick={() => updateForm('report_type', value as ReportType)}
-                  className={optionClass(form.report_type === value)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              {[
-                ['dog', 'Dog'],
-                ['cat', 'Cat'],
-                ['other', 'Other'],
-              ].map(([value, label]) => (
-                <button
-                  key={value}
-                  onClick={() => updateForm('species', value as Species)}
-                  className={optionClass(form.species === value)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <input
-                value={form.pet_name}
-                onChange={(event) => updateForm('pet_name', event.target.value)}
-                placeholder="Pet name"
-                className="h-11 rounded-xl border border-slate-200 px-3 text-sm text-slate-950"
-              />
-              <input
-                value={form.breed}
-                onChange={(event) => updateForm('breed', event.target.value)}
-                placeholder="Breed"
-                className="h-11 rounded-xl border border-slate-200 px-3 text-sm text-slate-950"
-              />
-              <input
-                value={form.color}
-                onChange={(event) => updateForm('color', event.target.value)}
-                placeholder="Color"
-                className="h-11 rounded-xl border border-slate-200 px-3 text-sm text-slate-950"
-              />
-              <input
-                value={form.location_notes}
-                onChange={(event) => updateForm('location_notes', event.target.value)}
-                placeholder="Location notes"
-                className="h-11 rounded-xl border border-slate-200 px-3 text-sm text-slate-950"
-              />
-            </div>
-
-            <textarea
-              value={form.description}
-              onChange={(event) => updateForm('description', event.target.value)}
-              placeholder="Description"
-              className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm text-slate-950"
-              rows={4}
-            />
-
-            <div className="mt-3 rounded-xl border border-teal-200 bg-teal-50 p-3 text-xs text-slate-600">
-              Location will be pinned on the mock map. Real GPS and Leaflet come later.
-            </div>
-
-            <Button onClick={submitReport} className="mt-4" size="lg" fullWidth>
-              Submit report
-            </Button>
-          </div>
-        </div>
-      ) : null}
+      <ReportPetFlow open={isReportFlowOpen} onClose={() => setIsReportFlowOpen(false)} />
+      <AlertSubscriptionFlow open={isAlertFlowOpen} onClose={() => setIsAlertFlowOpen(false)} />
     </div>
   )
 }
@@ -444,25 +324,32 @@ export function LostFoundBoard() {
 function ReportCard({
   report,
   distance,
+  timeAgo,
   selected,
   onSelect,
 }: {
   report: LostFoundReport
   distance: string
+  timeAgo: string
   selected: boolean
   onSelect: () => void
 }) {
   return (
-    <button onClick={onSelect} className="text-left">
-      <article className={`overflow-hidden rounded-2xl border bg-white shadow-sm ${selected ? 'border-violet-300' : 'border-slate-200'}`}>
-        <div className="relative grid h-36 place-items-center bg-gradient-to-br from-violet-50 to-teal-50">
-          <div className="absolute left-3 top-0 rounded-full bg-white/90 px-3 py-1 text-[11px] font-black text-slate-700">
+    <button onClick={onSelect} className="text-left focus:outline-none focus:ring-4 focus:ring-violet-100">
+      <article className={`group overflow-hidden rounded-[1.35rem] border bg-white shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-xl ${selected ? 'border-violet-400 ring-4 ring-violet-100' : 'border-slate-200 hover:border-violet-200'}`}>
+        <div className="relative grid h-40 place-items-center bg-gradient-to-br from-violet-100 via-white to-teal-100">
+          <div className="absolute left-3 top-3 rounded-full bg-white/90 px-3 py-1 text-[11px] font-black text-slate-700 shadow-sm">
             {speciesIcon[report.species]}
           </div>
-          <div className="absolute right-3 top-0">
+          <div className="absolute right-3 top-3">
             <StatusBadge label={report.report_type} tone={reportTypeTone(report.report_type)} />
           </div>
-          <div className="text-4xl font-black text-violet-700">{report.pet_name.slice(0, 1)}</div>
+          <div className="absolute bottom-3 left-3 rounded-full bg-white/90 px-3 py-1 text-[11px] font-black text-violet-700 shadow-sm">
+            {distance}
+          </div>
+          <div className="grid h-20 w-20 place-items-center rounded-[1.75rem] bg-white/80 text-5xl font-black text-violet-700 shadow-sm transition group-hover:scale-105">
+            {report.pet_name.slice(0, 1)}
+          </div>
         </div>
         <div className="p-4">
           <div className="flex items-start justify-between gap-3">
@@ -470,11 +357,12 @@ function ReportCard({
               <h3 className="truncate text-lg font-black tracking-tight text-slate-950">{report.pet_name}</h3>
               <p className="mt-1 text-xs font-semibold text-slate-500">{report.location_notes}</p>
             </div>
-            <p className="shrink-0 text-[11px] font-bold text-violet-700">{distance}</p>
+            <p className="shrink-0 text-[11px] font-bold text-slate-400">{timeAgo}</p>
           </div>
           <p className="mt-2 text-xs text-slate-500">
             {report.breed} - {report.color} - {formatDate(report.created_at)}
           </p>
+          <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-600">{report.description}</p>
         </div>
       </article>
     </button>
@@ -501,10 +389,10 @@ function ReportDetail({
   }
 
   return (
-    <Card className={compact ? 'p-3' : ''}>
+    <Card className={compact ? 'p-3' : 'sticky top-4 rounded-[1.5rem] border-violet-100 shadow-lg'}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Report detail</p>
+          <p className="text-xs font-bold text-violet-600">Report detail</p>
           <h3 className="mt-1 text-2xl font-black tracking-tight text-slate-950">{report.pet_name}</h3>
           <p className="mt-1 text-xs text-slate-500">{report.location_notes}</p>
         </div>
@@ -512,7 +400,7 @@ function ReportDetail({
       </div>
 
       {!compact ? (
-        <div className="mt-4 grid h-36 place-items-center rounded-2xl bg-gradient-to-br from-violet-50 to-teal-50 text-4xl font-black text-violet-700">
+        <div className="mt-4 grid h-44 place-items-center rounded-[1.35rem] bg-gradient-to-br from-violet-100 via-white to-teal-100 text-5xl font-black text-violet-700">
           {report.pet_name.slice(0, 1)}
         </div>
       ) : null}

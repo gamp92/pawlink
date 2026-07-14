@@ -242,8 +242,8 @@ function toAnimal(apiAnimal: ApiAnimal): Animal {
 }
 
 function optionClass(isActive: boolean) {
-  return `h-11 flex-1 rounded-xl border px-3 text-xs font-bold ${
-    isActive ? 'border-violet-300 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-600'
+  return `h-11 flex-1 rounded-xl border px-3 text-xs font-black shadow-sm transition hover:-translate-y-0.5 ${
+    isActive ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-violet-200'
   }`
 }
 
@@ -336,13 +336,13 @@ export function SmartAdoption() {
   }
 
   return (
-    <div className="pb-20 md:pb-0">
-      <div className="grid gap-5 md:grid-cols-2">
+    <div className="pb-24 md:pb-0">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(340px,0.75fr)]">
         <section className="min-w-0">
-          <div className="flex flex-col gap-3">
+          <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-xl font-black tracking-tight text-slate-950">Find your best match</h2>
+                <h2 className="text-2xl font-black tracking-tight text-slate-950">Find your best match</h2>
                 <p className="mt-1 text-sm leading-6 text-slate-500">
                   Search, tune your profile, and compare pets by compatibility.
                 </p>
@@ -360,11 +360,11 @@ export function SmartAdoption() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search by name, breed, species, or shelter"
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-950 shadow-sm"
+                className="mt-4 h-[52px] w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[15px] font-semibold text-slate-950 shadow-sm outline-none transition focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-100"
               />
             </label>
 
-            <div className="overflow-x-auto">
+            <div className="mt-3 overflow-x-auto">
               <div className="flex gap-2">
                 {filterChips.map((chip) => {
                   const isActive = chip.isActive(filters)
@@ -372,8 +372,8 @@ export function SmartAdoption() {
                     <button
                       key={chip.label}
                       onClick={() => applyFilter(chip.apply)}
-                      className={`h-11 shrink-0 rounded-full border px-4 text-xs font-bold ${
-                        isActive ? 'border-violet-300 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-600'
+                      className={`h-11 shrink-0 rounded-full border px-4 text-xs font-black shadow-sm transition hover:-translate-y-0.5 ${
+                        isActive ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-violet-200'
                       }`}
                     >
                       {chip.label}
@@ -384,7 +384,7 @@ export function SmartAdoption() {
             </div>
           </div>
 
-          <Card className="mt-4">
+          <Card className="mt-4 rounded-[1.5rem]">
             <button
               onClick={() => setIsProfileOpen((current) => !current)}
               className="flex w-full items-center justify-between gap-3 text-left"
@@ -408,10 +408,10 @@ export function SmartAdoption() {
                   <button
                     key={section}
                     onClick={() => setOpenSection(section as ProfileSection)}
-                    className={`h-11 rounded-xl border px-3 text-xs font-bold ${
+                    className={`h-11 rounded-xl border px-3 text-xs font-black shadow-sm transition hover:-translate-y-0.5 ${
                       openSection === section
-                        ? 'border-violet-300 bg-violet-50 text-violet-700'
-                        : 'border-slate-200 bg-white text-slate-600'
+                        ? 'border-violet-600 bg-violet-600 text-white'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-violet-200'
                     }`}
                   >
                     {label}
@@ -519,7 +519,7 @@ export function SmartAdoption() {
                 onClick={() => {
                   setSelectedId(result.animal.id)
                 }}
-                className="text-left"
+              className="text-left focus:outline-none focus:ring-4 focus:ring-violet-100"
               >
                 <AnimalCard animal={result.animal} compact score={result.score} selected={selectedId === result.animal.id} />
               </button>
@@ -527,7 +527,7 @@ export function SmartAdoption() {
           </div>
         </section>
 
-        <aside className="hidden md:block">
+        <aside className="hidden lg:block">
           <DetailPanel
             match={selectedMatch}
             onRequest={requestSelectedAnimal}
@@ -536,8 +536,8 @@ export function SmartAdoption() {
       </div>
 
       {selectedMatch ? (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white p-4 shadow-lg md:hidden">
-          <div className="mx-auto max-w-3xl">
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white/95 p-4 shadow-[0_-16px_40px_rgba(15,23,42,0.12)] backdrop-blur lg:hidden">
+          <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate text-sm font-black text-slate-950">{selectedMatch.animal.name}</p>
@@ -580,17 +580,26 @@ function DetailPanel({
   }
 
   return (
-    <Card className="border-violet-200">
-      <div className="relative grid h-36 place-items-center rounded-2xl bg-gradient-to-br from-violet-50 to-teal-50">
-        <div className="absolute left-3 top-0 rounded-full bg-white/90 px-3 py-1 text-xs font-black text-violet-700">
+    <Card className="sticky top-4 rounded-[1.5rem] border-violet-100 shadow-lg">
+      <div className="relative grid h-48 place-items-center overflow-hidden rounded-[1.35rem] bg-gradient-to-br from-violet-100 via-white to-teal-100">
+        <div className="absolute left-3 top-3 rounded-full bg-violet-600 px-3 py-1 text-xs font-black text-white shadow-lg shadow-violet-200">
           {match.score}% match
         </div>
-        <div className="text-4xl font-black text-violet-700">{match.animal.name.slice(0, 1)}</div>
+        <button
+          type="button"
+          className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full border border-white/70 bg-white/90 text-sm font-black text-violet-700 shadow-sm"
+          aria-label={`Save ${match.animal.name}`}
+        >
+          ♡
+        </button>
+        <div className="grid h-24 w-24 place-items-center rounded-[2rem] bg-white/80 text-6xl font-black text-violet-700 shadow-sm">
+          {match.animal.name.slice(0, 1)}
+        </div>
       </div>
 
       <div className="mt-4 flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-2xl font-black tracking-tight text-slate-950">{match.animal.name}</h3>
+          <h3 className="text-3xl font-black tracking-tight text-slate-950">{match.animal.name}</h3>
           <p className="mt-1 text-sm font-semibold text-slate-500">{match.animal.shelter.name}</p>
           <p className="mt-1 text-xs text-slate-500">
             {match.animal.breed} - {match.animal.age_years} years - {match.animal.size}
@@ -602,15 +611,15 @@ function DetailPanel({
       <p className="mt-4 text-sm leading-6 text-slate-600">{match.animal.description}</p>
 
       <div className="mt-4 space-y-2">
-        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Why this match works</p>
+        <p className="text-sm font-black text-slate-950">Why this match works</p>
         {match.reasons.map((reason) => (
-          <div key={reason} className="rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs font-bold text-violet-900">
+          <div key={reason} className="rounded-xl border border-violet-100 bg-violet-50 p-3 text-sm font-bold text-violet-900">
             {reason}
           </div>
         ))}
       </div>
 
-      <div className="mt-4">
+      <div className="mt-5">
         <Button onClick={onRequest} fullWidth>
           Request Adoption
         </Button>

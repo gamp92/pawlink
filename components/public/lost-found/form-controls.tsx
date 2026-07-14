@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 
 export const inputClassName =
-  'mt-2 h-[52px] w-full rounded-xl border border-slate-200 bg-white px-4 text-[15px] font-semibold text-slate-950 shadow-sm outline-none transition placeholder:text-slate-300 hover:border-slate-300 focus:border-violet-500 focus:ring-4 focus:ring-violet-100'
+  'mt-2 h-[52px] w-full rounded-xl border border-slate-200 bg-white px-4 text-[15px] font-semibold text-slate-950 shadow-sm outline-none transition placeholder:text-slate-300 hover:border-slate-300 focus:border-violet-500 focus:ring-4 focus:ring-violet-100 disabled:bg-slate-50 disabled:text-slate-400'
 
 export const textareaClassName =
   'mt-2 min-h-28 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-[15px] font-semibold leading-6 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-300 hover:border-slate-300 focus:border-violet-500 focus:ring-4 focus:ring-violet-100'
@@ -32,17 +32,19 @@ export function SegmentedControl<OptionValue extends string>({
   options,
   onChange,
   error,
+  columns = 'sm:grid-cols-3',
 }: {
   label: string
   value: OptionValue | ''
   options: Array<{ label: string; value: OptionValue }>
   onChange: (value: OptionValue) => void
   error?: string
+  columns?: string
 }) {
   return (
     <div>
       <p className="text-sm font-bold text-slate-700">{label}</p>
-      <div className="mt-2 grid gap-2 sm:grid-cols-3">
+      <div className={`mt-2 grid gap-2 ${columns}`}>
         {options.map((option) => (
           <button
             key={option.value}
@@ -60,31 +62,6 @@ export function SegmentedControl<OptionValue extends string>({
       </div>
       {error ? <p className="mt-1 text-xs font-bold text-rose-600">{error}</p> : null}
     </div>
-  )
-}
-
-export function BooleanChoice({
-  label,
-  value,
-  onChange,
-  error,
-}: {
-  label: string
-  value: boolean | null
-  onChange: (value: boolean) => void
-  error?: string
-}) {
-  return (
-    <SegmentedControl
-      label={label}
-      value={value === null ? '' : value ? 'yes' : 'no'}
-      options={[
-        { label: 'Yes', value: 'yes' },
-        { label: 'No', value: 'no' },
-      ]}
-      onChange={(nextValue) => onChange(nextValue === 'yes')}
-      error={error}
-    />
   )
 }
 

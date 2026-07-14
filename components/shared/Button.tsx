@@ -41,7 +41,7 @@ function getButtonClassName({
   className = '',
 }: Pick<SharedButtonProps, 'variant' | 'size' | 'fullWidth' | 'className'>) {
   return [
-    'inline-flex items-center justify-center rounded-xl border font-bold shadow-sm',
+    'inline-flex items-center justify-center rounded-xl border font-bold shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-violet-100 disabled:pointer-events-none disabled:translate-y-0 disabled:opacity-50',
     variantClasses[variant],
     sizeClasses[size],
     fullWidth ? 'w-full' : '',
