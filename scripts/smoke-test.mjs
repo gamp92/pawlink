@@ -20,7 +20,7 @@
  *     the only seeded user within the 2 km geo-alert radius is
  *     test+madrid1@gmail.com (a team inbox alias), so the alert email reaches
  *     the team and nobody else.
- *   - The adoption request uses the seeded test+near@gmail.com family profile.
+ *   - The adoption request needs no account: contact info travels inline.
  *
  * Everything the script creates, it deletes. Two tables have no DELETE
  * endpoint (adoption_requests, lost_found_reports), so cleanup for those uses
@@ -155,35 +155,35 @@ async function checkAnimalLifecycle(shelterId) {
   }
 }
 
-// ── Adoption request lifecycle (needs a seeded family id → service role) ───
-
-async function findSeedFamilyId() {
-  const { json } = await supaRest('GET', 'family_profiles?select=id&email=eq.test%2Bnear%40gmail.com&limit=1')
-  return json?.[0]?.id
-}
+// ── Adoption request lifecycle (no account needed, inline contact) ────────
 
 async function checkAdoptionLifecycle(shelterId) {
-  console.log('\nCiclo de solicitud de adopción:')
-  if (!hasServiceAccess) return skip('solicitudes', 'sin .env con SERVICE_ROLE_KEY (necesario para family_id y cleanup)')
-
-  const familyId = await findSeedFamilyId()
-  if (!familyId) return skip('solicitudes', 'no existe la familia seed test+near@gmail.com')
+  console.log('\nCiclo de solicitud de adopción (sin cuenta):')
+  if (!hasServiceAccess) return skip('solicitudes', 'sin service role para cleanup (la solicitud pendiente rompería el 409 en corridas futuras)')
 
   const gallery = await api('GET', `/api/animals/public?shelter_id=${shelterId}&limit=1`)
   const animalId = gallery.json?.animals?.[0]?.id
+  const contact = { full_name: 'SMOKE Familia', email: 'test+smokeadopt@gmail.com', phone: '+52 55 0000 0000' }
   const created = await api('POST', '/api/adoption-requests', {
-    animal_id: animalId, shelter_id: shelterId, family_id: familyId,
+    animal_id: animalId, shelter_id: shelterId, ...contact,
     family_profile: { living_space: 'apartment', lifestyle: 'moderate', experience: 'some', has_other_pets: false, has_children: true },
     compatibility_score: 94.5, compatibility_reasons: ['Temperamento tranquilo', 'Buena con ninos'],
   })
-  record(created.status === 201, 'POST /api/adoption-requests (shape del contrato) → 201')
+  record(created.status === 201, 'POST /api/adoption-requests sin cuenta → 201')
   const requestId = created.json?.request?.id
   if (!requestId) return
 
   try {
+    const duplicate = await api('POST', '/api/adoption-requests', { animal_id: animalId, shelter_id: shelterId, ...contact })
+    record(duplicate.status === 409, 'POST duplicado (mismo email+animal pendiente) → 409')
+
+    const noEmail = await api('POST', '/api/adoption-requests', { animal_id: animalId, shelter_id: shelterId, full_name: 'Sin Email' })
+    record(noEmail.status === 400, 'POST sin email → 400')
+
     const list = await api('GET', `/api/adoption-requests?shelter_id=${shelterId}`)
     const found = list.json?.requests?.find((r) => r.id === requestId)
     record(found?.compatibility_score === 94.5, 'GET devuelve compatibility_score persistido', `score: ${found?.compatibility_score}`)
+    record(found?.family?.email === contact.email && found?.family?.phone === contact.phone, 'GET devuelve contacto inline en family', found?.family?.email)
 
     const seen = await api('PATCH', `/api/adoption-requests/${requestId}`, { status: 'seen' })
     record(seen.status === 200, "PATCH a 'seen' → 200 (sin email: solo 'approved' lo manda)")
