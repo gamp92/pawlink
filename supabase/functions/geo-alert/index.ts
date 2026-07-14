@@ -1,5 +1,14 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
 const RESEND_API_URL = 'https://api.resend.com/emails'
 
 // Triggered by Supabase Database Webhook on INSERT into lost_found_reports table
@@ -38,7 +47,7 @@ Deno.serve(async (req: Request) => {
 
   const reportType = report.report_type === 'lost' ? 'perdida' : 'encontrada'
   const species = report.species === 'dog' ? 'perro' : report.species === 'cat' ? 'gato' : 'mascota'
-  const petName = report.pet_name ? `"${report.pet_name}"` : 'sin nombre'
+  const petName = report.pet_name ? `"${escapeHtml(report.pet_name)}"` : 'sin nombre'
 
   // Send email to each nearby user
   const emailPromises = nearbyUsers.map(
@@ -60,10 +69,10 @@ Deno.serve(async (req: Request) => {
             <ul>
               <li><strong>Nombre:</strong> ${petName}</li>
               <li><strong>Especie:</strong> ${species}</li>
-              ${report.breed ? `<li><strong>Raza:</strong> ${report.breed}</li>` : ''}
-              ${report.color ? `<li><strong>Color:</strong> ${report.color}</li>` : ''}
-              ${report.location_notes ? `<li><strong>Lugar:</strong> ${report.location_notes}</li>` : ''}
-              ${report.description ? `<li><strong>Descripción:</strong> ${report.description}</li>` : ''}
+              ${report.breed ? `<li><strong>Raza:</strong> ${escapeHtml(report.breed)}</li>` : ''}
+              ${report.color ? `<li><strong>Color:</strong> ${escapeHtml(report.color)}</li>` : ''}
+              ${report.location_notes ? `<li><strong>Lugar:</strong> ${escapeHtml(report.location_notes)}</li>` : ''}
+              ${report.description ? `<li><strong>Descripción:</strong> ${escapeHtml(report.description)}</li>` : ''}
             </ul>
             <p>Si tienes información, repórtalo en <a href="https://pawlink-theta.vercel.app/lost-found">Pawlink</a>.</p>
             <p style="font-size:12px;color:#888;">¿No quieres más alertas? <a href="${unsubscribeUrl}">Dejar de recibir alertas</a></p>

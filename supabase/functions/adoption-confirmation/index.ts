@@ -1,5 +1,14 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
 const RESEND_API_URL = 'https://api.resend.com/emails'
 
 // Triggered by Supabase Database Webhook on UPDATE to adoption_requests
@@ -49,17 +58,17 @@ Deno.serve(async (req: Request) => {
       to: request.email,
       subject: `🎉 ¡Tu solicitud de adopción fue aprobada!`,
       html: `
-        <h2>¡Felicidades, ${request.full_name ?? ''}!</h2>
-        <p>Tu solicitud para adoptar a <strong>${animal?.name}</strong> (${species}) fue <strong>aprobada</strong> por ${shelter?.name}.</p>
+        <h2>¡Felicidades, ${escapeHtml(request.full_name)}!</h2>
+        <p>Tu solicitud para adoptar a <strong>${escapeHtml(animal?.name)}</strong> (${species}) fue <strong>aprobada</strong> por ${escapeHtml(shelter?.name)}.</p>
         <h3>Próximos pasos</h3>
         <p>El refugio se pondrá en contacto contigo pronto para coordinar la entrega.</p>
         <h3>Datos del refugio</h3>
         <ul>
-          <li><strong>Nombre:</strong> ${shelter?.name}</li>
-          ${shelter?.phone ? `<li><strong>Teléfono:</strong> ${shelter.phone}</li>` : ''}
-          ${shelter?.email ? `<li><strong>Email:</strong> ${shelter.email}</li>` : ''}
+          <li><strong>Nombre:</strong> ${escapeHtml(shelter?.name)}</li>
+          ${shelter?.phone ? `<li><strong>Teléfono:</strong> ${escapeHtml(shelter.phone)}</li>` : ''}
+          ${shelter?.email ? `<li><strong>Email:</strong> ${escapeHtml(shelter.email)}</li>` : ''}
         </ul>
-        ${request.notes ? `<p><strong>Nota del refugio:</strong> ${request.notes}</p>` : ''}
+        ${request.notes ? `<p><strong>Nota del refugio:</strong> ${escapeHtml(request.notes)}</p>` : ''}
         <p>Gracias por elegir adoptar. 🐾</p>
         <p><a href="https://pawlink-theta.vercel.app">Pawlink</a></p>
       `,
