@@ -20,6 +20,22 @@ interface AdoptionRequestBody {
   compatibility_reasons?: string[]
 }
 
+interface AdoptionRequestRow {
+  id: string
+  status: string
+  compatibility_score: number | null
+  compatibility_reasons: string | null
+  notes: string | null
+  created_at: string
+  full_name: string | null
+  email: string | null
+  phone: string | null
+  living_space: string | null
+  has_children: boolean | null
+  has_other_pets: boolean | null
+  animals: { id: string; name: string; photo_urls: string[] | null } | null
+}
+
 // GET /api/adoption-requests
 // Returns adoption requests for the authenticated shelter
 // Contract: docs/api-contracts/f1-shelter-hub.md
@@ -52,11 +68,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ requests: data.map(toRequestResponse) }, { status: 200 })
+  const rows = data as unknown as AdoptionRequestRow[]
+  return NextResponse.json({ requests: rows.map(toRequestResponse) }, { status: 200 })
 }
 
 // Keeps the contract's response shape: contact + questionnaire under `family`
-function toRequestResponse(r: any) {
+function toRequestResponse(r: AdoptionRequestRow) {
   return {
     id: r.id,
     status: r.status,

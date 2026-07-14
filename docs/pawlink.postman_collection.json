@@ -139,7 +139,7 @@
             "url": { "raw": "{{base_url}}/api/adoption-requests", "host": ["{{base_url}}"], "path": ["api", "adoption-requests"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"animal_id\": \"{{animal_id}}\",\n  \"shelter_id\": \"{{shelter_id}}\",\n  \"family_id\": \"REPLACE_WITH_FAMILY_ID\",\n  \"living_space\": \"apartment\",\n  \"lifestyle\": \"moderate\",\n  \"experience\": \"some\",\n  \"has_other_pets\": false,\n  \"has_children\": true\n}"
+              "raw": "{\n  \"animal_id\": \"{{animal_id}}\",\n  \"shelter_id\": \"{{shelter_id}}\",\n  \"full_name\": \"Ana García\",\n  \"email\": \"ana.garcia@example.com\",\n  \"phone\": \"+52 55 1234 5678\",\n  \"family_profile\": {\n    \"living_space\": \"apartment\",\n    \"lifestyle\": \"moderate\",\n    \"experience\": \"some\",\n    \"has_other_pets\": false,\n    \"has_children\": true\n  }\n}"
             }
           }
         }
@@ -199,6 +199,32 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"report_id\": \"{{report_id}}\",\n  \"radius_m\": 2000\n}"
+            }
+          }
+        },
+        {
+          "name": "POST /api/alert-subscriptions",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/alert-subscriptions", "host": ["{{base_url}}"], "path": ["api", "alert-subscriptions"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"ana.garcia@example.com\",\n  \"full_name\": \"Ana García\",\n  \"city\": \"Ciudad de México\",\n  \"location\": {\n    \"lat\": 19.4117,\n    \"lng\": -99.1727\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "GET /api/alert-subscriptions/unsubscribe",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/alert-subscriptions/unsubscribe?token=REPLACE_WITH_UNSUBSCRIBE_TOKEN",
+              "host": ["{{base_url}}"],
+              "path": ["api", "alert-subscriptions", "unsubscribe"],
+              "query": [
+                { "key": "token", "value": "REPLACE_WITH_UNSUBSCRIBE_TOKEN" }
+              ]
             }
           }
         },

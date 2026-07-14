@@ -239,7 +239,7 @@ Shelterluv ($2/adoption).
 - F4 (RAG) is stretch — only if F1-F3 are done and time allows
 - Community module and MCP Server are explicitly out of scope for MVP
 - Volunteer module removed from F1
-- No public accounts: adoption requests carry contact inline; geo-alerts use email subscriptions (family_profiles removed — July 2026)
+- No public accounts: adoption requests carry contact inline; geo-alerts use email subscriptions (family_profiles removal in progress — phase 2 pending, July 2026)
 
 ### Fake data for testing
 - Seed script generates: 5 shelters (CDMX), 50 animals, 7 geo-test alert subscriptions (no accounts — email + map point), 10 lost/found reports

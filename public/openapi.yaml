@@ -220,21 +220,23 @@ paths:
         '500': { $ref: '#/components/responses/ServerError' }
     post:
       tags: [Adoption Requests (F1/F2)]
-      summary: Crea una solicitud de adopción (familia → shelter)
+      summary: Crea una solicitud de adopción (sin cuenta — contacto inline)
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [animal_id, shelter_id, family_id]
+              required: [animal_id, shelter_id, full_name, email]
               properties:
                 animal_id: { type: string, format: uuid }
                 shelter_id: { type: string, format: uuid }
-                family_id: { type: string, format: uuid }
+                full_name: { type: string, maxLength: 120, example: Ana García }
+                email: { type: string, format: email, maxLength: 255, description: Se guarda en minúsculas — clave de dedupe junto con animal_id }
+                phone: { type: string, maxLength: 20, example: '+52 55 1234 5678' }
                 family_profile:
                   allOf: [{ $ref: '#/components/schemas/FamilyProfile' }]
-                  description: Cuestionario anidado (shape del contrato F2). También se aceptan los mismos campos planos en el body.
+                  description: Cuestionario anidado (shape del contrato F2), opcional.
                 compatibility_score:
                   type: number
                   minimum: 0
@@ -263,6 +265,11 @@ paths:
                       created_at: { type: string, format: date-time }
                   message: { type: string }
         '400': { $ref: '#/components/responses/BadRequest' }
+        '409':
+          description: Ya existe una solicitud pendiente para este animal con el mismo email
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '500': { $ref: '#/components/responses/ServerError' }
 
   /api/adoption-requests/{id}:
@@ -346,7 +353,7 @@ paths:
       summary: Crea un reporte de mascota perdida/encontrada
       description: >
         Side effect: el INSERT dispara un Database Webhook → Edge Function `geo-alert` →
-        emails via Resend a usuarios registrados en un radio de 2 km.
+        emails via Resend a suscriptores de alertas (alert_subscriptions) en un radio de 2 km.
         Las fotos deben subirse a Storage antes; aquí solo van las URLs.
       requestBody:
         required: true
@@ -450,11 +457,72 @@ paths:
                     items:
                       type: object
                       properties:
-                        user_id: { type: string, format: uuid }
+                        subscription_id: { type: string, format: uuid }
                         email: { type: string, format: email }
                         distance_m: { type: number, example: 398.5 }
                   total: { type: integer }
         '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/alert-subscriptions:
+    post:
+      tags: [Lost & Found (F3)]
+      summary: Suscribe un email a geo-alertas alrededor de un punto del mapa (sin cuenta)
+      description: >
+        Una suscripción por email — repetir el POST con el mismo email actualiza la zona (upsert).
+        El unsubscribe_token nunca se expone por API; solo viaja dentro de los emails de alerta.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, location]
+              properties:
+                email: { type: string, format: email, maxLength: 255, description: Se guarda en minúsculas }
+                full_name: { type: string, maxLength: 120 }
+                city: { type: string, maxLength: 120 }
+                location:
+                  type: object
+                  required: [lat, lng]
+                  properties:
+                    lat: { type: number, minimum: -90, maximum: 90, example: 19.4117 }
+                    lng: { type: number, minimum: -180, maximum: 180, example: -99.1727 }
+      responses:
+        '201':
+          description: Suscripción creada o actualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subscription:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      email: { type: string, format: email }
+                      created_at: { type: string, format: date-time }
+                  message: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/alert-subscriptions/unsubscribe:
+    get:
+      tags: [Lost & Found (F3)]
+      summary: Baja de las geo-alertas por token (link en cada email de alerta)
+      parameters:
+        - { name: token, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Suscripción eliminada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: You will no longer receive alerts. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { description: Token desconocido, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '500': { $ref: '#/components/responses/ServerError' }
 
   /api/vision:
@@ -622,9 +690,11 @@ components:
             photo_urls: { type: array, items: { type: string, format: uri } }
         family:
           type: object
+          description: Contacto y cuestionario guardados en la propia solicitud (no hay tabla de familias)
           properties:
             full_name: { type: string }
             email: { type: string, format: email }
+            phone: { type: string, nullable: true }
             living_space: { type: string }
             has_children: { type: boolean }
             has_other_pets: { type: boolean }
