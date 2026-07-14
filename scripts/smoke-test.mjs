@@ -227,6 +227,48 @@ async function checkLostFoundLifecycle() {
   }
 }
 
+// ── Alert subscriptions: POST (upsert) → unsubscribe by token ───────────────
+
+async function checkAlertSubscriptions() {
+  console.log('\nSuscripciones a geo-alertas:')
+  if (!hasServiceAccess) return skip('suscripciones', 'sin service role para leer el token y limpiar')
+
+  const email = 'test+smokesub@gmail.com'
+  const query = `alert_subscriptions?email=eq.${encodeURIComponent(email)}`
+  // Mid-Atlantic point: far from every seeded report and subscriber
+  const created = await api('POST', '/api/alert-subscriptions', {
+    email, full_name: 'SMOKE Sub', city: 'smoke-test', location: { lat: 0, lng: -30 },
+  })
+  record(created.status === 201, 'POST /api/alert-subscriptions → 201')
+
+  try {
+    const again = await api('POST', '/api/alert-subscriptions', { email, location: { lat: 0.01, lng: -30 } })
+    record(again.status === 201, 'POST mismo email actualiza la zona (upsert) → 201')
+
+    const badEmail = await api('POST', '/api/alert-subscriptions', { email: 'no-es-email', location: { lat: 0, lng: 0 } })
+    record(badEmail.status === 400, 'POST email inválido → 400')
+
+    const badLocation = await api('POST', '/api/alert-subscriptions', { email, location: { lat: 95, lng: 0 } })
+    record(badLocation.status === 400, 'POST lat fuera de rango → 400')
+
+    const { json } = await supaRest('GET', `${query}&select=unsubscribe_token`)
+    const token = json?.[0]?.unsubscribe_token
+    const unsub = await api('GET', `/api/alert-subscriptions/unsubscribe?token=${token}`)
+    record(unsub.status === 200, 'GET unsubscribe con token → 200')
+
+    const gone = await supaRest('GET', `${query}&select=id`)
+    record((gone.json?.length ?? 0) === 0, 'la suscripción ya no existe tras unsubscribe')
+
+    const unknownToken = await api('GET', `/api/alert-subscriptions/unsubscribe?token=${NIL_UUID}`)
+    record(unknownToken.status === 404, 'unsubscribe token desconocido → 404')
+
+    const noToken = await api('GET', '/api/alert-subscriptions/unsubscribe')
+    record(noToken.status === 400, 'unsubscribe sin token → 400')
+  } finally {
+    await supaRest('DELETE', query)
+  }
+}
+
 // ── Vision + matching ───────────────────────────────────────────────────────
 
 async function checkVision() {
@@ -276,6 +318,7 @@ async function main() {
   await checkAnimalLifecycle(shelterId)
   await checkAdoptionLifecycle(shelterId)
   await checkLostFoundLifecycle()
+  await checkAlertSubscriptions()
   await checkVision()
   if (RUN_MATCHING) await checkMatching()
   else skip('POST /api/matching', 'usa --matching para incluirlo (consume tokens de Groq)')
