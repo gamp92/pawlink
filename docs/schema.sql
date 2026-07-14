@@ -167,6 +167,16 @@ create index alert_subscriptions_location_idx
 alter table alert_subscriptions enable row level security;
 
 
+-- One-time backfill (2026-07-13): carried the seeded geo users over from
+-- family_profiles. Idempotent via on conflict; phase 2 removes it together
+-- with family_profiles.
+insert into alert_subscriptions (email, full_name, city, location, created_at)
+select email, full_name, city, location, created_at
+from family_profiles
+where email is not null and location is not null
+on conflict (email) do nothing;
+
+
 -- ============================================================
 -- LOST & FOUND REPORTS
 -- F3 — Lost & Found
