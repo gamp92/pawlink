@@ -253,6 +253,7 @@ async function checkAlertSubscriptions() {
 
     const { json } = await supaRest('GET', `${query}&select=unsubscribe_token`)
     const token = json?.[0]?.unsubscribe_token
+    record(Boolean(token), 'la suscripción existe y tiene token (via service role)')
     const unsub = await api('GET', `/api/alert-subscriptions/unsubscribe?token=${token}`)
     record(unsub.status === 200, 'GET unsubscribe con token → 200')
 
@@ -260,7 +261,7 @@ async function checkAlertSubscriptions() {
     record((gone.json?.length ?? 0) === 0, 'la suscripción ya no existe tras unsubscribe')
 
     const unknownToken = await api('GET', `/api/alert-subscriptions/unsubscribe?token=${NIL_UUID}`)
-    record(unknownToken.status === 404, 'unsubscribe token desconocido → 404')
+    record(unknownToken.status === 404 && unknownToken.json?.error === 'Unknown token', 'unsubscribe token desconocido → 404 con error del endpoint')
 
     const noToken = await api('GET', '/api/alert-subscriptions/unsubscribe')
     record(noToken.status === 400, 'unsubscribe sin token → 400')
