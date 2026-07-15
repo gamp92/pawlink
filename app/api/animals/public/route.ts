@@ -31,8 +31,8 @@ export async function GET(request: Request) {
   if (species) query = query.eq('species', species)
   if (size) query = query.eq('size', size)
   if (energy_level) query = query.eq('energy_level', energy_level)
-  if (good_with_kids) query = query.eq('good_with_kids', good_with_kids === 'true')
-  if (good_with_pets) query = query.eq('good_with_pets', good_with_pets === 'true')
+  if (good_with_kids) query = query.eq('good_with_kids', good_with_kids.toLowerCase() === 'true')
+  if (good_with_pets) query = query.eq('good_with_pets', good_with_pets.toLowerCase() === 'true')
   if (shelter_id) query = query.eq('shelter_id', shelter_id)
 
   const { data, error, count } = await query
