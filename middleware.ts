@@ -13,7 +13,7 @@ function redirectToLogin(request: NextRequest): NextResponse {
   const url = request.nextUrl.clone()
   url.pathname = '/login'
   url.search = ''
-  url.searchParams.set('redirect', request.nextUrl.pathname)
+  url.searchParams.set('redirectedFrom', request.nextUrl.pathname)
   return NextResponse.redirect(url)
 }
 

@@ -26,7 +26,7 @@ export async function checkSession(request: NextRequest): Promise<SessionCheck> 
   return { response: holder.response, isAuthenticated: data.user !== null }
 }
 
-// NEXT_PUBLIC_* vars must be referenced statically — Next.js inlines them at
+// NEXT_PUBLIC_* vars must be referenced statically - Next.js inlines them at
 // build time and dynamic process.env[name] lookups come back undefined on Edge.
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -35,7 +35,7 @@ function createMiddlewareClient(request: NextRequest, holder: ResponseHolder) {
   return createServerClient(
     requireValue('NEXT_PUBLIC_SUPABASE_URL', SUPABASE_URL),
     requireValue('NEXT_PUBLIC_SUPABASE_ANON_KEY', SUPABASE_ANON_KEY),
-    { cookies: cookieAdapter(request, holder) }
+    { cookies: cookieAdapter(request, holder) },
   )
 }
 
