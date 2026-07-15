@@ -133,6 +133,7 @@ status      string   optional — 'pending' | 'seen' | 'approved' | 'rejected'
       "family": {
         "full_name": "Ana García",
         "email": "ana@email.com",
+        "phone": "+52 55 1234 5678",
         "living_space": "apartment",
         "has_children": true,
         "has_other_pets": false
@@ -142,6 +143,8 @@ status      string   optional — 'pending' | 'seen' | 'approved' | 'rejected'
   ]
 }
 ```
+
+**Note:** the `family` object is built from contact + questionnaire columns stored on `adoption_requests` itself. There is no `family_profiles` table and no adopter accounts.
 
 ---
 

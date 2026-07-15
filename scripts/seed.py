@@ -1,7 +1,7 @@
 """
 Pawlink seed script — Week 1 data setup
-Generates: 5 shelters (CDMX), 50 animals, 20 family profiles,
-           10 lost/found reports, geo-test users (CDMX + Madrid + Ecuador)
+Generates: 5 shelters (CDMX), 50 animals, 7 geo-test alert subscriptions,
+           10 lost/found reports
 
 Usage:
     pip install supabase python-dotenv
@@ -17,7 +17,6 @@ from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
 from supabase import create_client, Client
-from supabase_auth.errors import AuthApiError
 
 load_dotenv()
 
@@ -226,35 +225,6 @@ GEO_TEST_USERS = [
     },
 ]
 
-# ── Additional family profiles (non-geo-test) ────────────────────────────────
-
-FAMILY_EMAILS = [
-    "familia.garcia@gmail.com", "lopez.adopta@gmail.com",
-    "rodriguez_pets@gmail.com", "martinez.hogar@gmail.com",
-    "hernandez.familia@gmail.com", "gonzalez.mascotas@gmail.com",
-    "perez.adopcion@gmail.com", "sanchez.animales@gmail.com",
-    "ramirez.hogar@gmail.com", "flores.familia@gmail.com",
-    "morales.pets@gmail.com", "jiminez.adopta@gmail.com",
-    "reyes.mascotas@gmail.com",
-]
-
-FAMILY_NAMES = [
-    "Familia García", "Familia López", "Familia Rodríguez",
-    "Familia Martínez", "Familia Hernández", "Familia González",
-    "Familia Pérez", "Familia Sánchez", "Familia Ramírez",
-    "Familia Flores", "Familia Morales", "Familia Jiménez",
-    "Familia Reyes",
-]
-
-# CDMX coords spread for non-geo-test families
-CDMX_COORDS = [
-    (19.4270, -99.1676), (19.4050, -99.1200), (19.4500, -99.1400),
-    (19.3900, -99.1800), (19.4600, -99.2000), (19.4100, -99.0900),
-    (19.3700, -99.1600), (19.4800, -99.1300), (19.4200, -99.2100),
-    (19.3500, -99.1100), (19.4400, -99.1000), (19.3300, -99.1700),
-    (19.4700, -99.1500),
-]
-
 # ── Lost & Found reports ─────────────────────────────────────────────────────
 
 LOST_FOUND_DATA = [
@@ -318,59 +288,16 @@ def seed_animals(shelter_ids: list[str]) -> None:
     print(f"  ✓ 50 animals inserted")
 
 
-def find_auth_user_id(email: str) -> str:
-    users = supabase.auth.admin.list_users(per_page=1000)
-    return next(u.id for u in users if u.email == email)
-
-
-def create_auth_user(email: str, password: str = "Pawlink2025!") -> str:
-    try:
-        result = supabase.auth.admin.create_user({
-            "email": email,
-            "password": password,
-            "email_confirm": True,
-        })
-        return result.user.id
-    except AuthApiError:
-        # User left over from a previous seed run — reuse it
-        return find_auth_user_id(email)
-
-
-def seed_family_profiles(shelter_ids: list[str]) -> None:
-    print("Seeding geo-test users...")
+def seed_alert_subscriptions() -> None:
+    print("Seeding geo-test alert subscriptions...")
     for u in GEO_TEST_USERS:
-        user_id = create_auth_user(u["email"])
-        supabase.table("family_profiles").insert({
-            "user_id": user_id,
-            "full_name": u["full_name"],
+        supabase.table("alert_subscriptions").upsert({
             "email": u["email"],
+            "full_name": u["full_name"],
             "city": u["city"],
             "location": f"POINT({u['lng']} {u['lat']})",
-            "living_space": random.choice(["apartment", "house_no_yard", "house_yard"]),
-            "lifestyle": random.choice(["sedentary", "moderate", "active"]),
-            "experience": random.choice(["none", "some", "experienced"]),
-            "has_other_pets": random.choice([True, False]),
-            "has_children": random.choice([True, False]),
-        }).execute()
+        }, on_conflict="email").execute()
         print(f"  ✓ {u['email']} ({u['city']}) — {u['note']}")
-
-    print("Seeding additional family profiles (13)...")
-    for i, (email, name) in enumerate(zip(FAMILY_EMAILS, FAMILY_NAMES)):
-        user_id = create_auth_user(email)
-        lat, lng = CDMX_COORDS[i]
-        supabase.table("family_profiles").insert({
-            "user_id": user_id,
-            "full_name": name,
-            "email": email,
-            "city": "Ciudad de México",
-            "location": f"POINT({lng} {lat})",
-            "living_space": random.choice(["apartment", "house_no_yard", "house_yard"]),
-            "lifestyle": random.choice(["sedentary", "moderate", "active"]),
-            "experience": random.choice(["none", "some", "experienced"]),
-            "has_other_pets": random.choice([True, False]),
-            "has_children": random.choice([True, False]),
-        }).execute()
-    print(f"  ✓ 13 additional family profiles inserted")
 
 
 def seed_lost_found() -> None:
@@ -378,6 +305,7 @@ def seed_lost_found() -> None:
     for r in LOST_FOUND_DATA:
         lat, lng = r.pop("lat"), r.pop("lng")
         notes = r.pop("notes")
+        photos = DOG_PHOTOS if r["species"] == "dog" else CAT_PHOTOS
         supabase.table("lost_found_reports").insert({
             "report_type": r["type"],
             "pet_name": r["name"],
@@ -388,7 +316,8 @@ def seed_lost_found() -> None:
             "location": f"POINT({lng} {lat})",
             "location_notes": notes,
             "city": r["city"],
-            "photo_urls": [],
+            # Real photo so the map UI has images and /api/vision is demoable
+            "photo_urls": [random.choice(photos)],
         }).execute()
     print(f"  ✓ 10 lost/found reports inserted")
 
@@ -397,17 +326,12 @@ def main():
     print("\n🐾 Pawlink seed script starting...\n")
     shelter_ids = seed_shelters()
     seed_animals(shelter_ids)
-    seed_family_profiles(shelter_ids)
+    seed_alert_subscriptions()
     seed_lost_found()
     print("\n✅ Seed complete!")
-    print(f"\nGeo-test users (all password: Pawlink2025!):")
-    print(f"  CDMX ~400m  → test+near@gmail.com")
-    print(f"  CDMX ~1.2km → test+mid@gmail.com")
-    print(f"  CDMX ~4km   → test+far@gmail.com")
-    print(f"  Madrid 1    → test+madrid1@gmail.com")
-    print(f"  Madrid 2    → test+madrid2@gmail.com")
-    print(f"  Quito       → test+ecuador1@gmail.com")
-    print(f"  Guayaquil   → test+ecuador2@gmail.com")
+    print(f"\nGeo-test alert subscriptions (no accounts — email + map point only):")
+    for u in GEO_TEST_USERS:
+        print(f"  {u['city']:<16} → {u['email']} — {u['note']}")
 
 
 if __name__ == "__main__":

@@ -116,6 +116,10 @@ create table adoption_requests (
   animal_id       uuid references animals(id) on delete cascade,
   shelter_id      uuid references shelters(id) on delete cascade,
   family_id       uuid references family_profiles(id) on delete cascade,
+  -- Adopter contact (no account needed — replaces the family_profiles join)
+  full_name       text,
+  email           text,
+  phone           text,
   -- Snapshot of questionnaire at time of request
   living_space    text,
   lifestyle       text,
@@ -135,6 +139,42 @@ create table adoption_requests (
 create index adoption_requests_shelter_id_idx on adoption_requests(shelter_id);
 create index adoption_requests_animal_id_idx on adoption_requests(animal_id);
 create index adoption_requests_status_idx on adoption_requests(status);
+
+create unique index adoption_requests_pending_dedupe
+  on adoption_requests (animal_id, lower(email))
+  where status = 'pending';
+
+
+-- ============================================================
+-- GEO-ALERT SUBSCRIBERS (Lost & Found)
+-- No account, opt-in by email + map point
+-- ============================================================
+
+create table alert_subscriptions (
+  id                uuid primary key default gen_random_uuid(),
+  email             text not null unique,
+  full_name         text,
+  city              text,
+  location          geography(point, 4326) not null,
+  unsubscribe_token uuid not null unique default gen_random_uuid(),
+  created_at        timestamptz default now()
+);
+
+create index alert_subscriptions_location_idx
+  on alert_subscriptions using gist(location);
+
+-- No policies on purpose: only the service role touches this table.
+alter table alert_subscriptions enable row level security;
+
+
+-- One-time backfill (2026-07-13): carried the seeded geo users over from
+-- family_profiles. Idempotent via on conflict; phase 2 removes it together
+-- with family_profiles.
+insert into alert_subscriptions (email, full_name, city, location, created_at)
+select email, full_name, city, location, created_at
+from family_profiles
+where email is not null and location is not null
+on conflict (email) do nothing;
 
 
 -- ============================================================
@@ -273,33 +313,89 @@ create policy "lost_found_reporter_update"
 -- ============================================================
 -- HELPER FUNCTION — PostGIS radius query for geo-alerts
 -- Called by N8N when a new lost_found_report is created
--- Returns user_ids of family_profiles within X meters
+-- Returns subscribers from alert_subscriptions within X meters
 -- ============================================================
 
-create or replace function get_users_near_report(
-  report_id   uuid,
-  radius_m    float default 2000        -- default 2km
+-- Return shape changes (user_id → subscription_id + unsubscribe_token): drop + recreate
+drop function if exists get_users_near_report(uuid, float);
+
+create function get_users_near_report(
+  report_id uuid,
+  radius_m  float default 2000
 )
-returns table(user_id uuid, email text, distance_m float)
+returns table(subscription_id uuid, email text, distance_m float, unsubscribe_token uuid)
 language sql
 as $$
   select
-    fp.user_id,
-    au.email,
-    ST_Distance(fp.location, r.location)::float as distance_m
+    s.id,
+    s.email,
+    ST_Distance(s.location, r.location)::float as distance_m,
+    s.unsubscribe_token
   from lost_found_reports r
-  join family_profiles fp
-    on ST_DWithin(fp.location, r.location, radius_m)
-  join auth.users au
-    on au.id = fp.user_id
+  join alert_subscriptions s
+    on ST_DWithin(s.location, r.location, radius_m)
   where r.id = report_id
-  and fp.user_id is distinct from r.reporter_id   -- don't alert the reporter (NULL-safe: reporter_id is null for anonymous reports)
   order by distance_m asc;
 $$;
+
+-- Defense-in-depth: the RPC returns subscriber emails + unsubscribe tokens.
+-- SECURITY INVOKER + RLS already blanks it for anon, but don't rely on that alone.
+revoke execute on function get_users_near_report(uuid, float) from public, anon, authenticated;
+grant execute on function get_users_near_report(uuid, float) to service_role;
 
 -- Edge Functions call get_users_near_report via PostgREST as service_role,
 -- which lacks SELECT on auth schema tables by default (error 42501).
 grant select on auth.users to service_role;
+
+
+-- ============================================================
+-- HELPER FUNCTION — PostGIS radius query for the Lost & Found map
+-- Called by GET /api/lost-found when lat/lng are provided.
+-- (Existed in the live DB but was missing from this file — synced 2026-07-06)
+-- ============================================================
+
+create or replace function get_reports_near_point(
+  lat           float,
+  lng           float,
+  radius_m      float default 5000,
+  filter_status text default 'open',
+  filter_type   text default null,
+  result_limit  int default 50
+)
+returns table(
+  id uuid, report_type text, pet_name text, species text, breed text,
+  color text, description text, photo_urls text[], location json,
+  location_notes text, city text, status text,
+  matched_report_id uuid, match_confidence numeric, created_at timestamptz
+)
+language sql
+as $$
+  select
+    r.id,
+    r.report_type,
+    r.pet_name,
+    r.species,
+    r.breed,
+    r.color,
+    r.description,
+    r.photo_urls,
+    json_build_object(
+      'lat', ST_Y(r.location::geometry),
+      'lng', ST_X(r.location::geometry)
+    ) as location,
+    r.location_notes,
+    r.city,
+    r.status,
+    r.matched_report_id,
+    r.match_confidence,
+    r.created_at
+  from lost_found_reports r
+  where ST_DWithin(r.location, ST_MakePoint(lng, lat)::geography, radius_m)
+    and r.status = filter_status
+    and (filter_type is null or r.report_type = filter_type)
+  order by r.created_at desc
+  limit result_limit;
+$$;
 
 
 -- ============================================================

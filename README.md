@@ -104,6 +104,55 @@ App runs at http://localhost:3000
 
 ---
 
+## API documentation (Swagger)
+
+Interactive OpenAPI docs for all `/api/*` endpoints:
+
+```
+https://pawlink-theta.vercel.app/api-docs      ← Swagger UI (try endpoints live)
+https://pawlink-theta.vercel.app/openapi.yaml  ← raw spec (importable into Postman)
+```
+
+Locally: `npm run dev` → http://localhost:3000/api-docs
+
+The spec lives at `public/openapi.yaml` and is written by hand from the route
+handlers and `docs/api-contracts/`. When an endpoint changes, update the spec
+in the same PR. Validate with:
+
+```bash
+npx @apidevtools/swagger-cli validate public/openapi.yaml
+```
+
+---
+
+## Smoke test
+
+`scripts/smoke-test.mjs` exercises every endpoint against real infrastructure
+(Vercel + Supabase + webhooks + Edge Functions + Groq) — no mocks. Run it
+before Demo Day, after big merges, or whenever Supabase wakes from a pause.
+
+```bash
+node scripts/smoke-test.mjs                        # against production
+node scripts/smoke-test.mjs http://localhost:3000  # against local dev
+node scripts/smoke-test.mjs --matching             # include /api/matching (burns Groq tokens)
+```
+
+It discovers seeded rows through the public API, creates throwaway rows to
+test writes and async webhooks (social-post, geo-alert), and deletes
+everything it created. Exits non-zero on failure.
+
+Notes:
+
+- Run it **from the repo root** — it reads `.env` there. With `.env` (service
+  role) it runs all 22 checks; without it, the adoption-request checks and
+  direct cleanups are skipped and marked `⊘`.
+- Output: `✓` passed · `✗ FAIL` failed · `⊘` skipped, plus a final summary
+  (`Resultado: 22/22 checks OK`). Failures are listed at the end.
+- No dependencies to install — plain Node 18+.
+- Takes ~30s; the slowest part is waiting for the social-post webhook (Groq).
+
+---
+
 ## Environment variables
 
 See `.env.example` for the full list. Required:
@@ -225,4 +274,5 @@ Rule: No direct pushes to `main`. All changes via PR.
 
 - `docs/schema.sql` — Supabase schema, maintained by Lead
 - `docs/api-contracts/` — API contracts per feature, frozen before development
+- `public/openapi.yaml` — OpenAPI spec, served interactively at `/api-docs`
 - `CLAUDE.md` — Context for AI coding tools

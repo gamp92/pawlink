@@ -160,10 +160,10 @@ supabase functions deploy <function-name>
 
 - 5 shelters with real CDMX coordinates
 - 50 animals with Unsplash photos
-- 20 family profiles
+- 7 geo-test alert subscriptions (no accounts — email + map point)
 - 10 lost/found reports
 
-For geo-testing, users are seeded at known distances from a reference point:
+For geo-testing, alert subscriptions are seeded at known distances from a reference point:
 
 | Email | Distance | Expected behavior |
 |---|---|---|
@@ -239,9 +239,10 @@ Shelterluv ($2/adoption).
 - F4 (RAG) is stretch — only if F1-F3 are done and time allows
 - Community module and MCP Server are explicitly out of scope for MVP
 - Volunteer module removed from F1
+- No public accounts: adoption requests carry contact inline; geo-alerts use email subscriptions (family_profiles removal in progress — phase 2 pending, July 2026)
 
 ### Fake data for testing
-- Seed script generates: 5 shelters (CDMX), 50 animals, 20 family profiles, 10 lost/found reports
+- Seed script generates: 5 shelters (CDMX), 50 animals, 7 geo-test alert subscriptions (no accounts — email + map point), 10 lost/found reports
 - Geo-test users cover CDMX (near/mid/far from Parque México), Madrid, and Ecuador (Quito + Guayaquil)
 - Coordinates and photos are always independent — no real GPS needed
 

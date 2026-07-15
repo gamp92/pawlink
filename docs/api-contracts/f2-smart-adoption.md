@@ -123,15 +123,18 @@ Calls Groq API with family profile + animal list → returns scores and reasons.
 ## Adoption Requests
 
 ### POST /api/adoption-requests
-Submits an adoption request from a family to a shelter.
+Submits an adoption request. No account needed — contact info travels inline with the request.
 
-**Auth:** Required — family must be logged in with Supabase Auth.
+**Auth:** None. Public endpoint.
 
 **Request body:**
 ```json
 {
   "animal_id": "uuid",
   "shelter_id": "uuid",
+  "full_name": "Ana García",
+  "email": "ana@gmail.com",
+  "phone": "+52 55 1234 5678",
   "family_profile": {
     "living_space": "apartment",
     "lifestyle": "moderate",
@@ -146,6 +149,12 @@ Submits an adoption request from a family to a shelter.
   ]
 }
 ```
+
+**Validation:**
+- `full_name` required, non-empty, max 120 chars
+- `email` required, valid format, max 255 chars — dedupe key together with `animal_id`
+- `phone` optional, max 20 chars
+- `family_profile`, `compatibility_score`, `compatibility_reasons` optional (questionnaire snapshot)
 
 **Response 201:**
 ```json
@@ -163,7 +172,7 @@ Submits an adoption request from a family to a shelter.
 
 **Side effect:** None — the shelter sees the new request in their F1 dashboard (`GET /api/adoption-requests`). Email notification to the shelter was originally planned via N8N but was not implemented.
 
-**Error 409:**
+**Error 409** — same email already has a pending request for this animal:
 ```json
 {
   "error": "You already have a pending request for this animal."

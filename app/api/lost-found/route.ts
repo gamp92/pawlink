@@ -65,7 +65,8 @@ export async function POST(request: Request) {
   const body = await request.json()
   const { report_type, species, location, ...rest } = body
 
-  if (!report_type || !species || !location?.lat || !location?.lng) {
+  // typeof check, not truthiness: lat/lng of 0 (equator/Greenwich) are valid
+  if (!report_type || !species || typeof location?.lat !== 'number' || typeof location?.lng !== 'number') {
     return NextResponse.json(
       { error: 'report_type, species and location (lat, lng) are required' },
       { status: 400 }
