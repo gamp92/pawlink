@@ -11,6 +11,10 @@ function escapeHtml(value: unknown): string {
 
 const RESEND_API_URL = 'https://api.resend.com/emails'
 
+// Sender must belong to a domain verified in Resend. Without a verified domain,
+// only Resend's sandbox sender works — and it only delivers to the account owner.
+const RESEND_FROM = Deno.env.get('RESEND_FROM') ?? 'Pawlink <onboarding@resend.dev>'
+
 // Triggered by Supabase Database Webhook on UPDATE to adoption_requests
 // when status changes to 'approved' — sends confirmation email to family
 Deno.serve(async (req: Request) => {
@@ -54,7 +58,7 @@ Deno.serve(async (req: Request) => {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'Pawlink <adopciones@pawlink.mx>',
+      from: RESEND_FROM,
       to: request.email,
       subject: `🎉 ¡Tu solicitud de adopción fue aprobada!`,
       html: `
@@ -76,6 +80,8 @@ Deno.serve(async (req: Request) => {
   })
 
   if (!emailResponse.ok) {
+    const body = await emailResponse.text().catch(() => '(unreadable body)')
+    console.error(`adoption-confirmation: Resend rejected email to ${request.email}: ${emailResponse.status} ${body}`)
     return new Response(JSON.stringify({ error: 'Failed to send email' }), { status: 502 })
   }
 

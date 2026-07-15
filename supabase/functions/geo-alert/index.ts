@@ -11,6 +11,10 @@ function escapeHtml(value: unknown): string {
 
 const RESEND_API_URL = 'https://api.resend.com/emails'
 
+// Sender must belong to a domain verified in Resend. Without a verified domain,
+// only Resend's sandbox sender works — and it only delivers to the account owner.
+const RESEND_FROM = Deno.env.get('RESEND_FROM') ?? 'Pawlink <onboarding@resend.dev>'
+
 // Triggered by Supabase Database Webhook on INSERT into lost_found_reports table
 // Finds nearby users via PostGIS and sends email alerts via Resend
 Deno.serve(async (req: Request) => {
@@ -60,7 +64,7 @@ Deno.serve(async (req: Request) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: 'Pawlink <alertas@pawlink.mx>',
+          from: RESEND_FROM,
           to: user.email,
           subject: `🐾 ${report.report_type === 'lost' ? 'Mascota perdida' : 'Mascota encontrada'} cerca de ti`,
           html: `
@@ -82,10 +86,29 @@ Deno.serve(async (req: Request) => {
     }
   )
 
-  await Promise.allSettled(emailPromises)
+  const results = await Promise.allSettled(emailPromises)
+
+  let sent = 0
+  let failed = 0
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i]
+    const recipient = nearbyUsers[i].email
+    if (result.status === 'rejected') {
+      failed++
+      console.error(`geo-alert: email to ${recipient} failed: ${result.reason}`)
+      continue
+    }
+    if (!result.value.ok) {
+      failed++
+      const body = await result.value.text().catch(() => '(unreadable body)')
+      console.error(`geo-alert: Resend rejected email to ${recipient}: ${result.value.status} ${body}`)
+      continue
+    }
+    sent++
+  }
 
   return new Response(
-    JSON.stringify({ success: true, alerted: nearbyUsers.length }),
-    { status: 200 }
+    JSON.stringify({ success: failed === 0, alerted: nearbyUsers.length, sent, failed }),
+    { status: failed === 0 ? 200 : 502 }
   )
 })
