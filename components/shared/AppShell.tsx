@@ -47,17 +47,17 @@ export function AppShell({ title, subtitle, children, activeHref }: AppShellProp
                 <a
                   key={item.href}
                   href={item.href}
-                  className={`rounded-full border px-3 py-2 text-xs font-bold ${
+                  className={`ds-chip min-h-0 px-3 py-2 ${
                     isActive
-                      ? 'border-violet-200 bg-violet-50 text-violet-700'
-                      : 'border-slate-200 bg-white text-slate-500'
+                      ? 'ds-chip-active'
+                      : ''
                   }`}
                 >
                   {item.label}
                 </a>
               )
             })}
-            <a href="/login" className="rounded-full bg-slate-950 px-3 py-2 text-xs font-bold text-white">
+            <a href="/login" className="ds-button ds-button-secondary ds-button-sm">
               Login
             </a>
           </nav>
@@ -65,7 +65,7 @@ export function AppShell({ title, subtitle, children, activeHref }: AppShellProp
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-4 md:p-6">
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <section className="ds-card overflow-hidden">
           <div className="border-b border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 md:p-6">
             <PageHeader eyebrow="Pawlink" title={title} subtitle={subtitle} />
           </div>

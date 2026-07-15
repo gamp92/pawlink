@@ -1,5 +1,7 @@
 'use client'
 
+import dynamic from 'next/dynamic'
+import type React from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/shared/Button'
 import { Card } from '@/components/shared/Card'
@@ -9,6 +11,7 @@ import { LoadingState } from '@/components/shared/LoadingState'
 import { reportTypeTone, StatusBadge } from '@/components/shared/StatusBadge'
 import { AlertSubscriptionFlow } from '@/components/public/lost-found/AlertSubscriptionFlow'
 import { ReportPetFlow } from '@/components/public/lost-found/ReportPetFlow'
+import { getPetDisplayImage } from '@/components/shared/pet-display-image'
 import {
   lostFoundReports,
   type LostFoundReport,
@@ -17,6 +20,7 @@ import {
 } from '@/lib/mock-data'
 
 type ReportFilter = 'all' | ReportType
+type ReportSort = 'newest' | 'oldest' | 'name'
 
 type ApiLostFoundReport = {
   id: string
@@ -36,13 +40,25 @@ type ApiLostFoundReport = {
   created_at: string
 }
 
-const markerPositions = [
-  { left: '31%', top: '33%' },
-  { left: '48%', top: '35%' },
-  { left: '39%', top: '54%' },
-  { left: '58%', top: '50%' },
-  { left: '26%', top: '62%' },
-]
+type ApiLocation =
+  | LostFoundReport['location']
+  | { latitude?: number | string; longitude?: number | string }
+  | { coordinates?: [number, number] }
+  | string
+  | null
+
+const ReportMap = dynamic(() => import('@/components/public/lost-found/map/ReportMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="pawlink-map-shell pawlink-report-map">
+      <div className="pawlink-map-skeleton">
+        <div className="pawlink-map-overlay left-3 top-3 rounded-2xl border border-white/80 bg-white/90 p-3 text-xs font-black text-slate-600 shadow-sm">
+          Loading map
+        </div>
+      </div>
+    </div>
+  ),
+})
 
 const speciesIcon: Record<Species, string> = {
   dog: 'Dog',
@@ -50,7 +66,65 @@ const speciesIcon: Record<Species, string> = {
   other: 'Pet',
 }
 
-function toLostFoundReport(apiReport: ApiLostFoundReport): LostFoundReport {
+const visualFallbackLocations: LostFoundReport['location'][] = [
+  { lat: 19.4129, lng: -99.1727 },
+  { lat: 19.4141, lng: -99.1704 },
+  { lat: 19.4118, lng: -99.1742 },
+  { lat: 19.4162, lng: -99.1688 },
+  { lat: 19.4098, lng: -99.1763 },
+  { lat: 19.4182, lng: -99.1749 },
+]
+
+function isValidCoordinate(lat: unknown, lng: unknown): lat is number {
+  return (
+    typeof lat === 'number' &&
+    typeof lng === 'number' &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lng) <= 180
+  )
+}
+
+function fallbackLocationFor(index: number) {
+  return visualFallbackLocations[index % visualFallbackLocations.length]
+}
+
+function parseApiLocation(location: ApiLocation, index: number): LostFoundReport['location'] {
+  if (!location) return fallbackLocationFor(index)
+
+  if (typeof location === 'string') {
+    const match = location.match(/POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i)
+    if (match) {
+      const lng = Number(match[1])
+      const lat = Number(match[2])
+      if (isValidCoordinate(lat, lng)) return { lat, lng }
+    }
+
+    return fallbackLocationFor(index)
+  }
+
+  if ('coordinates' in location && Array.isArray(location.coordinates)) {
+    const [lng, lat] = location.coordinates.map(Number)
+    if (isValidCoordinate(lat, lng)) return { lat, lng }
+  }
+
+  if ('lat' in location && 'lng' in location) {
+    const lat = Number(location.lat)
+    const lng = Number(location.lng)
+    if (isValidCoordinate(lat, lng)) return { lat, lng }
+  }
+
+  if ('latitude' in location && 'longitude' in location) {
+    const lat = Number(location.latitude)
+    const lng = Number(location.longitude)
+    if (isValidCoordinate(lat, lng)) return { lat, lng }
+  }
+
+  return fallbackLocationFor(index)
+}
+
+function toLostFoundReport(apiReport: ApiLostFoundReport, index: number): LostFoundReport {
   return {
     id: apiReport.id,
     report_type: apiReport.report_type,
@@ -60,7 +134,7 @@ function toLostFoundReport(apiReport: ApiLostFoundReport): LostFoundReport {
     color: apiReport.color ?? 'unknown',
     description: apiReport.description ?? 'No description provided yet.',
     photo_urls: apiReport.photo_urls ?? [],
-    location: apiReport.location ?? { lat: 19.4133, lng: -99.1718 },
+    location: parseApiLocation(apiReport.location, index),
     location_notes: apiReport.location_notes ?? 'Location shared by the community',
     city: apiReport.city ?? 'CDMX',
     status: apiReport.status,
@@ -83,9 +157,27 @@ function distanceFor(index: number) {
 }
 
 function optionClass(isActive: boolean) {
-  return `h-11 rounded-xl border px-4 text-xs font-bold ${
-    isActive ? 'border-violet-300 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-600'
+  return `pawlink-filter-chip ${
+    isActive ? 'pawlink-filter-chip-active' : ''
   }`
+}
+
+function reportMatchesQuery(report: LostFoundReport, query: string) {
+  const normalizedQuery = query.trim().toLowerCase()
+  if (!normalizedQuery) return true
+  return [
+    report.pet_name,
+    report.species,
+    report.breed,
+    report.color,
+    report.location_notes,
+    report.city,
+    report.description,
+    report.report_type,
+  ]
+    .join(' ')
+    .toLowerCase()
+    .includes(normalizedQuery)
 }
 
 export function LostFoundBoard() {
@@ -94,9 +186,12 @@ export function LostFoundBoard() {
   const [error, setError] = useState<string | null>(null)
   const [isUsingFallback, setIsUsingFallback] = useState(false)
   const [filter, setFilter] = useState<ReportFilter>('all')
+  const [query, setQuery] = useState('')
+  const [sortBy, setSortBy] = useState<ReportSort>('newest')
   const [selectedId, setSelectedId] = useState(lostFoundReports[0]?.id ?? '')
   const [isReportFlowOpen, setIsReportFlowOpen] = useState(false)
   const [isAlertFlowOpen, setIsAlertFlowOpen] = useState(false)
+  const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false)
   const [notifiedReportId, setNotifiedReportId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -146,11 +241,24 @@ export function LostFoundBoard() {
   }, [])
 
   const visibleReports = useMemo(
-    () => reports.filter((report) => report.status === 'open' && (filter === 'all' || report.report_type === filter)),
-    [filter, reports],
+    () => {
+      const filteredReports = reports.filter(
+        (report) =>
+          report.status === 'open' &&
+          (filter === 'all' || report.report_type === filter) &&
+          reportMatchesQuery(report, query),
+      )
+
+      return [...filteredReports].sort((first, second) => {
+        if (sortBy === 'name') return first.pet_name.localeCompare(second.pet_name)
+        if (sortBy === 'oldest') return Date.parse(first.created_at) - Date.parse(second.created_at)
+        return Date.parse(second.created_at) - Date.parse(first.created_at)
+      })
+    },
+    [filter, query, reports, sortBy],
   )
 
-  const selectedReport = reports.find((report) => report.id === selectedId) ?? visibleReports[0]
+  const selectedReport = visibleReports.find((report) => report.id === selectedId) ?? visibleReports[0]
   const matchedReport = selectedReport?.matched_report_id
     ? reports.find((report) => report.id === selectedReport.matched_report_id) ?? null
     : null
@@ -159,104 +267,145 @@ export function LostFoundBoard() {
   function selectReport(report: LostFoundReport) {
     setSelectedId(report.id)
     setNotifiedReportId(null)
+    setIsMobileDetailOpen(true)
   }
 
+  useEffect(() => {
+    if (!visibleReports.length) return
+    if (!visibleReports.some((report) => report.id === selectedId)) {
+      setSelectedId(visibleReports[0].id)
+    }
+  }, [selectedId, visibleReports])
+
+  useEffect(() => {
+    const selectedCard = document.getElementById(`lost-found-report-${selectedReport?.id ?? ''}`)
+    selectedCard?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+  }, [selectedReport?.id])
+
+  function clearDiscoveryFilters() {
+    setFilter('all')
+    setQuery('')
+    setSortBy('newest')
+  }
+
+  const hasActiveDiscoveryFilters = filter !== 'all' || query.trim() || sortBy !== 'newest'
+
   return (
-    <div className="pb-20 md:pb-0">
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.9fr)]">
-        <section className="min-w-0">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-2xl font-black tracking-tight text-slate-950">Nearby pet reports</h2>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                Explore open lost and found reports around the community.
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              {isLoading ? <StatusBadge label="Loading" tone="amber" /> : null}
-              {isUsingFallback ? <StatusBadge label="Fallback" tone="amber" /> : null}
-              <StatusBadge label={`${visibleReports.length} open`} tone="purple" />
-            </div>
-          </div>
+    <div className="mx-auto max-w-[1400px] pb-20 md:pb-0">
+      <div className="mb-5">
+        <div>
+          <p className="text-sm font-bold text-violet-700">Lost & Found</p>
+          <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Find nearby pet reports</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+            Explore community reports on the map, filter by lost or found, and help pets get home.
+          </p>
+        </div>
+      </div>
 
-          <div className="mt-4 flex gap-2 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+      <div className="pawlink-discovery-toolbar mb-4">
+        <div className="pawlink-search-shell">
+          <label className="block" htmlFor="lost-found-search">
+            <span className="sr-only">Search lost and found reports</span>
+            <div className="pawlink-search-field">
+              <span aria-hidden="true" className="pawlink-search-icon">⌕</span>
+              <input
+                id="lost-found-search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search reports, pets, locations..."
+                className="pawlink-search-input"
+              />
+              {query ? (
+                <button type="button" onClick={() => setQuery('')} className="pawlink-search-clear" aria-label="Clear search">
+                  x
+                </button>
+              ) : null}
+            </div>
+          </label>
+          <p className="mt-2 text-xs text-slate-500">Try “golden”, “cat”, “park”, or “found”.</p>
+        </div>
+
+        <div className="pawlink-toolbar-row">
+          <div className="pawlink-filter-row" aria-label="Report filters">
             {[
-              ['all', 'All'],
-              ['lost', 'Lost'],
-              ['found', 'Found'],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                onClick={() => setFilter(value as ReportFilter)}
-                className={optionClass(filter === value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {error ? (
-            <div className="mt-4">
-              <ErrorState title="Using fallback reports" description={error} />
-            </div>
-          ) : null}
-
-          <div className="relative mt-4 min-h-[460px] overflow-hidden rounded-[1.75rem] border border-teal-100 bg-teal-50 shadow-xl shadow-teal-100/60">
-            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(15,118,110,.12)_1px,transparent_1px),linear-gradient(rgba(15,118,110,.12)_1px,transparent_1px)] bg-[size:86px_86px]" />
-            <div className="absolute left-[22%] top-[22%] h-24 w-36 rounded-3xl bg-teal-100/60 shadow-inner" />
-            <div className="absolute left-[58%] top-[18%] h-28 w-32 rounded-3xl bg-white/45" />
-            <div className="absolute left-[18%] top-[28%] h-40 w-40 rounded-full border border-dashed border-rose-500/80 bg-rose-50/20" />
-            <div className="absolute left-[42%] top-[8%] h-[84%] w-3 rounded-full bg-white/70" />
-            <div className="absolute left-[8%] top-[58%] h-3 w-[84%] rounded-full bg-white/70" />
-
-            <Button
-              onClick={() => setIsReportFlowOpen(true)}
-              className="absolute right-4 top-4 shadow-lg shadow-violet-200"
-              size="sm"
-            >
-              Report Pet
-            </Button>
-
-            {visibleReports.map((report, index) => {
-              const position = markerPositions[index % markerPositions.length]
-              const isSelected = selectedReport?.id === report.id
+              ['all', 'All', 'Map'],
+              ['lost', 'Lost', 'L'],
+              ['found', 'Found', 'F'],
+            ].map(([value, label, icon]) => {
+              const selected = filter === value
               return (
                 <button
-                  key={report.id}
-                  onClick={() => selectReport(report)}
-                  className={`absolute rounded-full border px-3 py-2 text-[11px] font-black shadow-lg transition duration-300 hover:-translate-y-1 focus:outline-none focus:ring-4 focus:ring-violet-100 ${
-                    isSelected
-                      ? 'scale-110 border-violet-300 bg-violet-600 text-white shadow-violet-300'
-                      : 'border-white/70 bg-white/95 text-slate-700 hover:border-violet-200'
-                  }`}
-                  style={position}
-                  aria-label={`Select ${report.report_type} report for ${report.pet_name}`}
+                  key={value}
+                  type="button"
+                  onClick={() => setFilter(value as ReportFilter)}
+                  aria-pressed={selected}
+                  className={optionClass(selected)}
                 >
-                  <span className="mr-1">{report.report_type === 'lost' ? 'Lost' : 'Found'}</span>
-                  <span>{speciesIcon[report.species]}</span>
+                  <span aria-hidden="true">{selected ? '✓' : icon}</span>
+                  {label}
                 </button>
               )
             })}
-
-            <div className="absolute bottom-4 left-4 rounded-2xl border border-white/70 bg-white/90 p-3 text-[11px] shadow-sm backdrop-blur">
-              <div className="font-bold text-rose-600">Lost pet</div>
-              <div className="mt-1 font-bold text-teal-600">Found pet</div>
-            </div>
           </div>
 
-          <Card className="mt-4 rounded-[1.5rem]">
-            <div className="flex items-center justify-between gap-3">
+          <div className="pawlink-toolbar-actions">
+            <div className="flex shrink-0 items-center gap-2">
+              {isLoading ? <StatusBadge label="Loading" tone="amber" /> : null}
+              {isUsingFallback ? <StatusBadge label="Fallback data" tone="amber" /> : null}
+              <StatusBadge label={`${visibleReports.length} results`} tone="purple" />
+            </div>
+
+            <label className="pawlink-sort-control">
+              <span>Sort</span>
+              <select value={sortBy} onChange={(event) => setSortBy(event.target.value as ReportSort)}>
+                <option value="newest">Newest</option>
+                <option value="oldest">Oldest</option>
+                <option value="name">Name</option>
+              </select>
+            </label>
+
+            {hasActiveDiscoveryFilters ? (
+              <button type="button" onClick={clearDiscoveryFilters} className="pawlink-clear-filters">
+                Clear filters
+              </button>
+            ) : null}
+
+            <Button onClick={() => setIsAlertFlowOpen(true)} variant="secondary">Get alerts</Button>
+            <div className="hidden lg:block">
+              <Button onClick={() => setIsReportFlowOpen(true)}>Report a pet</Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {error ? (
+        <div className="mb-4">
+          <ErrorState title="Using fallback reports" description={error} />
+        </div>
+      ) : null}
+
+      <div className="pawlink-explorer-grid">
+        <section className="min-w-0">
+          <div className="relative">
+            <ReportMap reports={visibleReports} selectedReportId={selectedReport?.id ?? ''} onSelectReport={selectReport} />
+            <div className="pointer-events-none absolute bottom-4 right-4 z-[500] lg:hidden">
+              <Button
+                onClick={() => setIsReportFlowOpen(true)}
+                className="pointer-events-auto shadow-lg shadow-violet-200"
+                size="sm"
+              >
+                Report a pet
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        <aside className="min-w-0">
+          <Card className="pawlink-report-list-shell rounded-[1.5rem] p-4">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-sm font-black text-slate-950">Open reports</h3>
-                <p className="mt-1 text-xs text-slate-500">Swipe through active community reports.</p>
-              </div>
-              <div className="flex gap-2">
-                <Button onClick={() => setIsAlertFlowOpen(true)} size="sm" variant="secondary">
-                  Alerts
-                </Button>
-                <Button onClick={() => setIsReportFlowOpen(true)} size="sm" variant="secondary">
-                  Report
-                </Button>
+                <h3 className="text-lg font-black tracking-tight text-slate-950">Open reports</h3>
+                <p className="mt-1 text-sm text-slate-500">Select a report to focus its map marker.</p>
               </div>
             </div>
 
@@ -271,12 +420,12 @@ export function LostFoundBoard() {
                 <EmptyState
                   title="No active reports"
                   description="Try another filter or submit a report to help the community."
-                  action={<Button onClick={() => setIsReportFlowOpen(true)}>Report Pet</Button>}
+                  action={<Button onClick={() => setIsReportFlowOpen(true)}>Report a pet</Button>}
                 />
               </div>
             ) : null}
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="pawlink-report-list mt-4">
               {visibleReports.map((report, index) => (
                 <ReportCard
                   key={report.id}
@@ -285,25 +434,21 @@ export function LostFoundBoard() {
                   timeAgo={timeAgoFor(index)}
                   selected={selectedReport?.id === report.id}
                   onSelect={() => selectReport(report)}
+                  onNotify={() => setNotifiedReportId(report.id)}
+                  matchedReport={report.matched_report_id ? reports.find((item) => item.id === report.matched_report_id) ?? null : null}
+                  notified={notifiedReportId === report.id}
                 />
               ))}
             </div>
           </Card>
-        </section>
-
-        <aside className="hidden lg:block">
-          <ReportDetail
-            report={selectedReport}
-            matchedReport={matchedReport}
-            shouldShowVisionPanel={Boolean(shouldShowVisionPanel)}
-            notifiedReportId={notifiedReportId}
-            onNotify={() => selectedReport && setNotifiedReportId(selectedReport.id)}
-          />
         </aside>
       </div>
 
-      {selectedReport ? (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white p-4 shadow-lg md:hidden">
+      {selectedReport && isMobileDetailOpen ? (
+        <div className="fixed inset-0 z-50 bg-slate-950/40 lg:hidden" role="dialog" aria-modal="true" aria-label={`${selectedReport.pet_name} report detail`}>
+          <button type="button" className="absolute inset-0 h-full w-full cursor-default" onClick={() => setIsMobileDetailOpen(false)} aria-label="Close report detail" />
+          <div className="absolute bottom-0 left-0 right-0 max-h-[82vh] overflow-y-auto rounded-t-3xl bg-white p-4 shadow-xl">
+            <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-200" />
           <ReportDetail
             report={selectedReport}
             matchedReport={matchedReport}
@@ -312,6 +457,7 @@ export function LostFoundBoard() {
             onNotify={() => setNotifiedReportId(selectedReport.id)}
             compact
           />
+          </div>
         </div>
       ) : null}
 
@@ -327,45 +473,104 @@ function ReportCard({
   timeAgo,
   selected,
   onSelect,
+  onNotify,
+  matchedReport,
+  notified,
 }: {
   report: LostFoundReport
   distance: string
   timeAgo: string
   selected: boolean
   onSelect: () => void
+  onNotify: () => void
+  matchedReport: LostFoundReport | null
+  notified: boolean
 }) {
+  const imageUrl = getPetDisplayImage(report)
+  const petName = report.pet_name || 'Unknown pet'
+  const showVision = selected && report.report_type === 'found' && matchedReport && report.match_confidence
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLElement>) {
+    if (event.currentTarget !== event.target) return
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      onSelect()
+    }
+  }
+
   return (
-    <button onClick={onSelect} className="text-left focus:outline-none focus:ring-4 focus:ring-violet-100">
-      <article className={`group overflow-hidden rounded-[1.35rem] border bg-white shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-xl ${selected ? 'border-violet-400 ring-4 ring-violet-100' : 'border-slate-200 hover:border-violet-200'}`}>
-        <div className="relative grid h-40 place-items-center bg-gradient-to-br from-violet-100 via-white to-teal-100">
-          <div className="absolute left-3 top-3 rounded-full bg-white/90 px-3 py-1 text-[11px] font-black text-slate-700 shadow-sm">
-            {speciesIcon[report.species]}
-          </div>
-          <div className="absolute right-3 top-3">
+    <article
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
+      aria-label={`Select ${report.report_type} report for ${petName}`}
+      onClick={onSelect}
+      onKeyDown={handleKeyDown}
+      id={`lost-found-report-${report.id}`}
+      className="pawlink-report-card-button pawlink-report-card focus:outline-none focus:ring-4 focus:ring-violet-100"
+      data-selected={selected ? 'true' : undefined}
+    >
+        <div className="pawlink-photo-frame pawlink-report-thumb">
+          <img src={imageUrl} alt={`${petName}, ${report.species} ${report.report_type} report`} className="pawlink-pet-photo" />
+          <div className="pawlink-report-overlay-top">
             <StatusBadge label={report.report_type} tone={reportTypeTone(report.report_type)} />
           </div>
-          <div className="absolute bottom-3 left-3 rounded-full bg-white/90 px-3 py-1 text-[11px] font-black text-violet-700 shadow-sm">
-            {distance}
-          </div>
-          <div className="grid h-20 w-20 place-items-center rounded-[1.75rem] bg-white/80 text-5xl font-black text-violet-700 shadow-sm transition group-hover:scale-105">
-            {report.pet_name.slice(0, 1)}
+          <div className="pawlink-report-overlay-bottom">
+            <span>{distance}</span>
           </div>
         </div>
-        <div className="p-4">
+        <div className="pawlink-report-content min-w-0">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h3 className="truncate text-lg font-black tracking-tight text-slate-950">{report.pet_name}</h3>
-              <p className="mt-1 text-xs font-semibold text-slate-500">{report.location_notes}</p>
+              <h3 className="truncate text-xl font-black leading-7 text-slate-950">{petName}</h3>
+              <p className="mt-1 truncate text-sm font-semibold text-slate-500">
+                {speciesIcon[report.species]} · {report.breed}
+              </p>
             </div>
-            <p className="shrink-0 text-[11px] font-bold text-slate-400">{timeAgo}</p>
+            <span className="pawlink-report-date-chip">{timeAgo}</span>
           </div>
-          <p className="mt-2 text-xs text-slate-500">
-            {report.breed} - {report.color} - {formatDate(report.created_at)}
+
+          <p className="mt-3 truncate text-sm font-bold text-slate-700">
+            {report.location_notes}
           </p>
-          <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-600">{report.description}</p>
+
+          <div className="pawlink-report-meta-row">
+            <span className="pawlink-report-chip">{formatDate(report.created_at)}</span>
+            <span className="pawlink-report-chip">{report.color}</span>
+            <span className="pawlink-report-chip">{report.city}</span>
+          </div>
+
+          <p className="pawlink-report-description">{report.description}</p>
+          <span className="pawlink-report-cta">View details</span>
+
+          <div className="pawlink-selected-details text-left">
+            {showVision ? (
+              <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 p-3">
+                <p className="text-sm font-black text-violet-900">Vision match found</p>
+                <p className="mt-1 text-xs leading-5 text-slate-600">
+                  Possible match with {matchedReport.pet_name} at {report.match_confidence}% confidence.
+                </p>
+                {notified ? (
+                  <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-700">
+                    Owner notified in mock workflow.
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onNotify()
+                    }}
+                    className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-xl border border-violet-600 bg-violet-600 px-3 text-xs font-black text-white"
+                  >
+                    Notify owner
+                  </button>
+                )}
+              </div>
+            ) : null}
+          </div>
         </div>
-      </article>
-    </button>
+    </article>
   )
 }
 
@@ -388,22 +593,25 @@ function ReportDetail({
     return <EmptyState title="Select a report" description="Choose a map marker or report card to see details." />
   }
 
+  const imageUrl = getPetDisplayImage(report)
+  const petName = report.pet_name || 'Unknown pet'
+
   return (
-    <Card className={compact ? 'p-3' : 'sticky top-4 rounded-[1.5rem] border-violet-100 shadow-lg'}>
+    <Card className={compact ? 'p-0 overflow-hidden' : 'sticky top-4 overflow-hidden rounded-[1.5rem] border-violet-100 shadow-lg'}>
+      <div className="pawlink-photo-frame" style={{ aspectRatio: compact ? '16 / 9' : '21 / 9' }}>
+        <img src={imageUrl} alt={`${petName}, ${report.species} ${report.report_type} report`} className="pawlink-pet-photo" />
+        <div className="absolute left-4 top-4">
+          <StatusBadge label={report.report_type} tone={reportTypeTone(report.report_type)} />
+        </div>
+      </div>
+      <div className={compact ? 'p-4' : 'p-5'}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-bold text-violet-600">Report detail</p>
-          <h3 className="mt-1 text-2xl font-black tracking-tight text-slate-950">{report.pet_name}</h3>
+          <h3 className="mt-1 text-2xl font-black tracking-tight text-slate-950">{petName}</h3>
           <p className="mt-1 text-xs text-slate-500">{report.location_notes}</p>
         </div>
-        <StatusBadge label={report.report_type} tone={reportTypeTone(report.report_type)} />
       </div>
-
-      {!compact ? (
-        <div className="mt-4 grid h-44 place-items-center rounded-[1.35rem] bg-gradient-to-br from-violet-100 via-white to-teal-100 text-5xl font-black text-violet-700">
-          {report.pet_name.slice(0, 1)}
-        </div>
-      ) : null}
 
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -435,6 +643,7 @@ function ReportDetail({
           )}
         </div>
       ) : null}
+      </div>
     </Card>
   )
 }

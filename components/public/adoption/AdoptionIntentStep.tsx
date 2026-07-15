@@ -7,7 +7,7 @@ import type { AdoptionStepProps } from '@/components/public/adoption/types'
 
 export function AdoptionIntentStep({ form, errors, updateField }: AdoptionStepProps) {
   return (
-    <div className="space-y-4">
+    <div className="public-form-stack">
       <Field id="motivation" label="Why do you want to adopt?" error={errors.adoption_motivation}>
         <textarea
           id="motivation"

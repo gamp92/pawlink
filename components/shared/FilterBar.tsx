@@ -19,11 +19,8 @@ export function FilterBar<TValue extends string>({ options, value, onChange }: F
             <button
               key={option.value}
               onClick={() => onChange(option.value)}
-              className={`h-11 shrink-0 rounded-full border px-4 text-xs font-black transition ${
-                isActive
-                  ? 'border-violet-600 bg-violet-600 text-white shadow-sm'
-                  : 'border-slate-200 bg-white text-slate-600'
-              }`}
+              aria-pressed={isActive}
+              className={`ds-chip ${isActive ? 'ds-chip-active' : ''}`}
             >
               {option.label}
             </button>

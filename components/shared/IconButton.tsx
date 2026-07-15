@@ -11,7 +11,7 @@ export function IconButton({ label, children, className = '', ...props }: IconBu
       {...props}
       aria-label={label}
       title={label}
-      className={`grid h-11 w-11 place-items-center rounded-full border border-slate-200 bg-white text-sm font-black text-slate-600 shadow-sm transition ${className}`}
+      className={`ds-icon-button text-sm font-black ${className}`}
     >
       {children}
     </button>

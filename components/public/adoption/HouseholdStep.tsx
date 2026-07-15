@@ -9,7 +9,7 @@ import type { AdoptionStepProps, LivingSpace, OwnRent } from '@/components/publi
 
 export function HouseholdStep({ form, errors, updateField }: AdoptionStepProps) {
   return (
-    <div className="space-y-4">
+    <div className="public-form-stack">
       <SegmentedControl<LivingSpace>
         label="Living space"
         value={form.living_space}

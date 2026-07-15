@@ -13,7 +13,7 @@ type Props = {
 
 export function ReportLocationStep({ form, errors, updateField }: Props) {
   return (
-    <div className="space-y-4">
+    <div className="public-form-stack">
       <Field id="location-notes" label="Location description" error={errors.location_notes}>
         <input
           id="location-notes"

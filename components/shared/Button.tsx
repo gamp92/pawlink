@@ -22,16 +22,16 @@ type LinkButtonProps = SharedButtonProps &
   }
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'border-violet-600 bg-violet-600 text-white',
-  secondary: 'border-slate-200 bg-white text-slate-700',
-  ghost: 'border-transparent bg-transparent text-slate-600',
-  danger: 'border-rose-600 bg-rose-600 text-white',
+  primary: 'ds-button-primary',
+  secondary: 'ds-button-secondary',
+  ghost: 'ds-button-ghost',
+  danger: 'ds-button-danger',
 }
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: 'h-10 px-3 text-xs',
-  md: 'h-11 px-4 text-sm',
-  lg: 'h-12 px-5 text-base',
+  sm: 'ds-button-sm',
+  md: 'ds-button-md',
+  lg: 'ds-button-lg',
 }
 
 function getButtonClassName({
@@ -41,7 +41,7 @@ function getButtonClassName({
   className = '',
 }: Pick<SharedButtonProps, 'variant' | 'size' | 'fullWidth' | 'className'>) {
   return [
-    'inline-flex items-center justify-center rounded-xl border font-bold shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-violet-100 disabled:pointer-events-none disabled:translate-y-0 disabled:opacity-50',
+    'ds-button',
     variantClasses[variant],
     sizeClasses[size],
     fullWidth ? 'w-full' : '',

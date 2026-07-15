@@ -19,7 +19,7 @@ const toneClasses: Record<StatTone, string> = {
 
 export function StatCard({ label, value, detail, icon, tone = 'violet' }: StatCardProps) {
   return (
-    <article className={`rounded-2xl border border-slate-200 bg-gradient-to-br p-4 shadow-sm ${toneClasses[tone]}`}>
+    <article className={`ds-card ds-card-pad-md bg-gradient-to-br ${toneClasses[tone]}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{label}</p>

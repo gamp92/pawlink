@@ -10,8 +10,8 @@ export function DashboardCard({ children, className = '', interactive = false }:
   return (
     <section
       className={[
-        'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm',
-        interactive ? 'transition hover:-translate-y-0.5 hover:shadow-lg' : '',
+        'ds-card ds-card-pad-md',
+        interactive ? 'ds-card-interactive' : '',
         className,
       ]
         .filter(Boolean)

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import type { MouseEvent, PointerEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { FlowProgress } from '@/components/public/lost-found/FlowProgress'
 import { LostFoundReportReview } from '@/components/public/lost-found/LostFoundReportReview'
 import { LostFoundReportSuccess } from '@/components/public/lost-found/LostFoundReportSuccess'
@@ -19,12 +20,12 @@ import { initialLostFoundReportForm } from '@/components/public/lost-found/types
 import { Button } from '@/components/shared/Button'
 import { ErrorState } from '@/components/shared/ErrorState'
 
-const reportSteps: Array<{ id: LostFoundFlowStep; label: string; description: string }> = [
-  { id: 'reporter', label: 'Contact', description: 'How helpers reach you' },
-  { id: 'pet', label: 'Pet', description: 'What to look for' },
-  { id: 'location', label: 'Location', description: 'Where it happened' },
-  { id: 'photos', label: 'Photos', description: 'Visual recognition' },
-  { id: 'review', label: 'Review', description: 'Final check' },
+const reportSteps: Array<{ id: LostFoundFlowStep; label: string; description: string; icon: string }> = [
+  { id: 'reporter', label: 'Contact', description: 'Your details', icon: 'ID' },
+  { id: 'pet', label: 'Pet', description: 'Pet profile', icon: 'PET' },
+  { id: 'location', label: 'Location', description: 'Map pin', icon: 'PIN' },
+  { id: 'photos', label: 'Photos', description: 'Images', icon: 'IMG' },
+  { id: 'review', label: 'Review', description: 'Submit', icon: 'OK' },
 ]
 
 const stepTitles: Record<LostFoundFlowStep, string> = {
@@ -50,12 +51,27 @@ export function ReportPetFlow({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [result, setResult] = useState<LostFoundReportSubmissionResult | null>(null)
+  const swipeStartYRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        closeAndReset()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [open])
 
   if (!open) return null
 
   const stepIndex = reportSteps.findIndex((item) => item.id === step)
   const isFirstStep = stepIndex === 0
   const isReviewStep = step === 'review'
+  const currentStepTitle = result ? 'Report prepared' : stepTitles[step]
 
   function updateField<FieldName extends keyof LostFoundReportForm>(
     field: FieldName,
@@ -182,45 +198,76 @@ export function ReportPetFlow({
     setIsSubmitting(false)
   }
 
+  function handleBackdropClick(event: MouseEvent<HTMLDivElement>) {
+    if (event.target === event.currentTarget) {
+      closeAndReset()
+    }
+  }
+
+  function handlePanelPointerDown(event: PointerEvent<HTMLElement>) {
+    swipeStartYRef.current = event.clientY
+  }
+
+  function handlePanelPointerUp(event: PointerEvent<HTMLElement>) {
+    const startY = swipeStartYRef.current
+    swipeStartYRef.current = null
+
+    if (startY === null || window.innerWidth >= 768) return
+    if (event.clientY - startY > 90) {
+      closeAndReset()
+    }
+  }
+
   const stepProps = { form, errors, updateField }
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-50 md:grid md:place-items-center md:bg-slate-950/50 md:p-6">
-      <section className="flex h-full flex-col bg-slate-50 md:h-auto md:max-h-[92vh] md:w-full md:max-w-4xl md:overflow-hidden md:rounded-[2rem] md:border md:border-white/70 md:bg-white md:shadow-2xl">
-        <div className="border-b border-slate-200/70 bg-white/90 p-4 backdrop-blur md:p-5">
-          <div className="mx-auto flex max-w-3xl items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-black text-violet-600">Community report</p>
-              <h2 className="mt-1 text-3xl font-black tracking-tight text-slate-950">
-                {result ? 'Report prepared' : stepTitles[step]}
-              </h2>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                Share clear details so shelters and neighbors can help quickly.
-              </p>
+    <div className="report-flow-overlay" onMouseDown={handleBackdropClick}>
+      <section
+        className="report-flow-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="report-pet-title"
+        aria-describedby="report-pet-description"
+        onMouseDown={(event) => event.stopPropagation()}
+        onPointerDown={handlePanelPointerDown}
+        onPointerUp={handlePanelPointerUp}
+      >
+        <div className="report-flow-header">
+          <div className="report-flow-grabber" aria-hidden="true" />
+          <div className="report-flow-title-row">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="report-flow-icon" aria-hidden="true">PET</div>
+              <div className="min-w-0">
+                <p className="report-flow-kicker">{currentStepTitle}</p>
+                <h2 id="report-pet-title" className="report-flow-title">Report a pet</h2>
+                <p id="report-pet-description" className="report-flow-description">
+                  Share the essentials with neighbors and shelters. You can review everything before sending.
+                </p>
+              </div>
             </div>
             <button
               type="button"
               onClick={closeAndReset}
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-slate-200 bg-white text-sm font-black text-slate-500 shadow-sm transition hover:border-violet-200 hover:text-violet-700 focus:outline-none focus:ring-4 focus:ring-violet-100"
+              className="report-flow-close"
               aria-label="Close report form"
             >
               x
             </button>
           </div>
           {!result ? (
-            <div className="mx-auto mt-4 max-w-3xl">
+            <div className="report-flow-progress-wrap">
               <FlowProgress steps={reportSteps} currentStep={step} onSelectStep={setStep} />
             </div>
           ) : null}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="report-flow-body">
           {result ? (
-            <div className="mx-auto max-w-2xl">
+            <div className="report-flow-content">
               <LostFoundReportSuccess result={result} onClose={closeAndReset} />
             </div>
           ) : (
-            <div className="mx-auto max-w-3xl space-y-4 transition duration-300">
+            <div className="report-flow-content space-y-4">
               {step === 'reporter' ? <ReporterInformationStep {...stepProps} /> : null}
               {step === 'pet' ? <PetInformationStep {...stepProps} /> : null}
               {step === 'location' ? <ReportLocationStep {...stepProps} /> : null}
@@ -232,8 +279,8 @@ export function ReportPetFlow({
         </div>
 
         {!result ? (
-          <div className="border-t border-slate-200/70 bg-white/95 p-4 shadow-[0_-12px_30px_rgba(15,23,42,0.04)] backdrop-blur">
-            <div className="mx-auto flex max-w-3xl gap-3">
+          <div className="report-flow-footer">
+            <div className="report-flow-footer-inner">
               <Button type="button" variant="secondary" onClick={goBack} fullWidth disabled={isFirstStep || isSubmitting}>
                 Back
               </Button>

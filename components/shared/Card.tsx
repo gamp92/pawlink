@@ -1,20 +1,20 @@
-import type { ReactNode } from 'react'
+import type { HTMLAttributes, ReactNode } from 'react'
 
-type CardProps = {
+type CardProps = HTMLAttributes<HTMLElement> & {
   children: ReactNode
   className?: string
   tone?: 'default' | 'muted' | 'accent'
 }
 
 const toneClasses: Record<NonNullable<CardProps['tone']>, string> = {
-  default: 'border-slate-200 bg-white',
-  muted: 'border-slate-200 bg-slate-50',
-  accent: 'border-violet-200 bg-violet-50',
+  default: '',
+  muted: 'ds-card-muted',
+  accent: 'ds-card-accent',
 }
 
-export function Card({ children, className = '', tone = 'default' }: CardProps) {
+export function Card({ children, className = '', tone = 'default', ...props }: CardProps) {
   return (
-    <section className={`rounded-2xl border p-4 shadow-sm ${toneClasses[tone]} ${className}`}>
+    <section {...props} className={`ds-card ds-card-pad-md ${toneClasses[tone]} ${className}`}>
       {children}
     </section>
   )

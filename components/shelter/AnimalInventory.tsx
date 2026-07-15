@@ -267,9 +267,12 @@ export function AnimalInventory() {
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {visibleAnimals.map((animal) => (
               <div key={animal.id}>
-                <button onClick={() => selectAnimal(animal)} className="w-full text-left">
-                  <AnimalCard animal={animal} compact selected={selectedAnimal?.id === animal.id} />
-                </button>
+                <AnimalCard
+                  animal={animal}
+                  compact
+                  selected={selectedAnimal?.id === animal.id}
+                  onSelect={() => selectAnimal(animal)}
+                />
                 <div className="-mt-2 flex justify-end px-3 pb-3">
                   <button
                     onClick={() => openEditForm(animal)}

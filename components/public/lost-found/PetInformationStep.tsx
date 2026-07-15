@@ -50,7 +50,7 @@ export function PetInformationStep({ form, errors, updateField }: Props) {
         </div>
       </aside>
 
-      <div className="space-y-4">
+      <div className="public-form-stack">
         <SegmentedControl<ReportType>
           label="Report type"
           value={form.report_type}

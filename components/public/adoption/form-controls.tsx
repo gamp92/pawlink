@@ -1,10 +1,49 @@
 import type { ReactNode } from 'react'
 
 export const inputClassName =
-  'mt-2 h-[52px] w-full rounded-xl border border-slate-200 bg-white px-4 text-[15px] font-semibold text-slate-950 shadow-sm outline-none transition placeholder:text-slate-300 hover:border-slate-300 focus:border-violet-500 focus:ring-4 focus:ring-violet-100'
+  'public-input'
 
 export const textareaClassName =
-  'mt-2 min-h-28 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-[15px] font-semibold leading-6 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-300 hover:border-slate-300 focus:border-violet-500 focus:ring-4 focus:ring-violet-100'
+  'public-input public-textarea'
+
+function choiceMeta(label: string, value: string) {
+  const normalized = value.toLowerCase()
+  const byValue: Record<string, { icon: string; description: string }> = {
+    apartment: { icon: 'APT', description: 'Compact home or condo' },
+    house: { icon: 'HOME', description: 'House with more room' },
+    other: { icon: 'ALT', description: 'Another living setup' },
+    own: { icon: 'OWN', description: 'You own the home' },
+    rent: { icon: 'RENT', description: 'Rental or lease' },
+    yes: { icon: 'YES', description: 'This applies to me' },
+    no: { icon: 'NO', description: 'This does not apply' },
+    low: { icon: 'LOW', description: 'Calm daily rhythm' },
+    moderate: { icon: 'MOD', description: 'Balanced activity' },
+    high: { icon: 'HIGH', description: 'Active lifestyle' },
+    rarely: { icon: 'RARE', description: 'Mostly home' },
+    sometimes: { icon: 'SOME', description: 'Occasional trips' },
+    often: { icon: 'OFT', description: 'Frequent travel' },
+    none: { icon: 'NEW', description: 'First-time adopter' },
+    some: { icon: 'CARE', description: 'Some pet care' },
+    experienced: { icon: 'PRO', description: 'Confident caregiver' },
+  }
+
+  return byValue[normalized] ?? {
+    icon: label.slice(0, 3).toUpperCase(),
+    description: 'Choose this option',
+  }
+}
+
+function fieldHelper(label: string) {
+  const normalized = label.toLowerCase()
+  if (normalized.includes('optional')) return 'Optional'
+  if (normalized.includes('email')) return 'Use an email you check often.'
+  if (normalized.includes('phone')) return 'Optional, used only for follow-up.'
+  if (normalized.includes('city')) return 'Helps the shelter understand distance.'
+  if (normalized.includes('household')) return 'A simple estimate is fine.'
+  if (normalized.includes('hours')) return 'Use a typical weekday.'
+  if (normalized.includes('description') || normalized.includes('details')) return 'A few specific details are most helpful.'
+  return 'Required information'
+}
 
 export function Field({
   id,
@@ -18,10 +57,10 @@ export function Field({
   children: ReactNode
 }) {
   return (
-    <label className="block" htmlFor={id}>
-      <span className="text-sm font-bold text-slate-700">{label}</span>
+    <label className="public-field" htmlFor={id}>
+      <span className="public-field-label">{label}</span>
       {children}
-      {error ? <span className="mt-1 block text-xs font-bold text-rose-600">{error}</span> : null}
+      {error ? <span className="public-error">{error}</span> : <span className="public-helper">{fieldHelper(label)}</span>}
     </label>
   )
 }
@@ -40,25 +79,31 @@ export function SegmentedControl<OptionValue extends string>({
   error?: string
 }) {
   return (
-    <div>
-      <p className="text-sm font-bold text-slate-700">{label}</p>
-      <div className="mt-2 grid gap-2 sm:grid-cols-3">
-        {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() => onChange(option.value)}
-            className={`min-h-12 rounded-xl border px-3 text-sm font-black shadow-sm transition hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-violet-100 ${
-              value === option.value
-                ? 'border-violet-500 bg-violet-600 text-white'
-                : 'border-slate-200 bg-white text-slate-600 hover:border-violet-200'
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
+    <div className="public-choice-group">
+      <p className="public-choice-label">{label}</p>
+      <div className="public-choice-grid sm:grid-cols-3">
+        {options.map((option) => {
+          const selected = value === option.value
+          const meta = choiceMeta(option.label, option.value)
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              aria-pressed={selected}
+              className="public-radio-card"
+              data-selected={selected}
+            >
+              <span className="public-radio-icon" aria-hidden="true">{meta.icon}</span>
+              <span>
+                <span className="public-radio-title">{option.label}</span>
+                <span className="public-radio-description">{meta.description}</span>
+              </span>
+            </button>
+          )
+        })}
       </div>
-      {error ? <p className="mt-1 text-xs font-bold text-rose-600">{error}</p> : null}
+      {error ? <p className="public-error">{error}</p> : null}
     </div>
   )
 }
@@ -103,20 +148,18 @@ export function CheckboxField({
 }) {
   return (
     <div>
-      <label
-        htmlFor={id}
-        className="flex min-h-14 items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm font-semibold leading-6 text-slate-700 shadow-sm transition hover:border-violet-200"
-      >
+      <label htmlFor={id} className="public-checkbox-card">
         <input
           id={id}
           type="checkbox"
           checked={checked}
           onChange={(event) => onChange(event.target.checked)}
-          className="mt-1 h-4 w-4 accent-violet-600"
+          className="public-checkbox-input"
         />
+        <span className="public-checkbox-switch" aria-hidden="true" />
         <span>{children}</span>
       </label>
-      {error ? <p className="mt-1 text-xs font-bold text-rose-600">{error}</p> : null}
+      {error ? <p className="public-error">{error}</p> : null}
     </div>
   )
 }

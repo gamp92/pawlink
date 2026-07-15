@@ -9,8 +9,8 @@ type EmptyStateProps = {
 
 export function EmptyState({ title, description, action }: EmptyStateProps) {
   return (
-    <Card className="overflow-hidden text-center">
-      <div className="relative mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-gradient-to-br from-violet-100 to-teal-100 text-xl font-black text-violet-700 shadow-sm">
+    <Card className="ds-state">
+      <div className="ds-state-icon">
         <div className="absolute -right-1 -top-1 h-5 w-5 rounded-full bg-white/80" />
         <span aria-hidden="true">✦</span>
       </div>

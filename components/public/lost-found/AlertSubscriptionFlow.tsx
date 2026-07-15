@@ -1,9 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { AlertLocationStep } from '@/components/public/lost-found/AlertLocationStep'
 import { AlertSubscriptionSuccess } from '@/components/public/lost-found/AlertSubscriptionSuccess'
-import { FlowProgress } from '@/components/public/lost-found/FlowProgress'
 import {
   CheckboxField,
   Field,
@@ -42,6 +41,32 @@ export function AlertSubscriptionFlow({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [result, setResult] = useState<AlertSubscriptionResult | null>(null)
+  const titleId = useId()
+  const descriptionId = useId()
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    closeButtonRef.current?.focus()
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        closeAndReset()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = ''
+      previousFocusRef.current?.focus()
+    }
+  }, [open])
 
   if (!open) return null
 
@@ -148,20 +173,28 @@ export function AlertSubscriptionFlow({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-50 md:grid md:place-items-center md:bg-slate-950/50 md:p-6">
-      <section className="flex h-full flex-col bg-slate-50 md:h-auto md:max-h-[92vh] md:w-full md:max-w-3xl md:overflow-hidden md:rounded-[2rem] md:border md:border-white/70 md:bg-white md:shadow-2xl">
-        <div className="border-b border-slate-200/70 bg-white/90 p-4 backdrop-blur md:p-5">
+    <div className="pawlink-dialog-backdrop" onClick={closeAndReset}>
+      <section
+        className="pawlink-dialog-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="sticky top-0 z-10 border-b border-slate-200/70 bg-white/95 p-4 backdrop-blur md:p-5">
           <div className="mx-auto flex max-w-2xl items-start justify-between gap-3">
             <div>
               <p className="text-xs font-black text-violet-600">Nearby alerts</p>
-              <h2 className="mt-1 text-3xl font-black tracking-tight text-slate-950">
+              <h2 id={titleId} className="mt-1 text-2xl font-black tracking-tight text-slate-950 md:text-3xl">
                 {result ? 'Alert preference ready' : 'Get nearby alerts'}
               </h2>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
+              <p id={descriptionId} className="mt-1 text-sm leading-6 text-slate-500">
                 Choose where you want to hear about lost and found pet activity.
               </p>
             </div>
             <button
+              ref={closeButtonRef}
               type="button"
               onClick={closeAndReset}
               className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-slate-200 bg-white text-sm font-black text-slate-500 shadow-sm transition hover:border-violet-200 hover:text-violet-700 focus:outline-none focus:ring-4 focus:ring-violet-100"
@@ -172,12 +205,12 @@ export function AlertSubscriptionFlow({
           </div>
           {!result ? (
             <div className="mx-auto mt-4 max-w-2xl">
-              <FlowProgress steps={alertSteps} currentStep={step} onSelectStep={setStep} />
+              <AlertProgress steps={alertSteps} currentStep={step} onSelectStep={setStep} />
             </div>
           ) : null}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="pawlink-dialog-body p-4 md:p-6">
           {result ? (
             <div className="mx-auto max-w-2xl">
               <AlertSubscriptionSuccess result={result} onClose={closeAndReset} />
@@ -267,7 +300,7 @@ export function AlertSubscriptionFlow({
         </div>
 
         {!result ? (
-          <div className="border-t border-slate-200/70 bg-white/95 p-4 shadow-[0_-12px_30px_rgba(15,23,42,0.04)] backdrop-blur">
+          <div className="sticky bottom-0 border-t border-slate-200/70 bg-white/95 p-4 shadow-[0_-12px_30px_rgba(15,23,42,0.04)] backdrop-blur">
             <div className="mx-auto flex max-w-2xl gap-3">
               <Button type="button" variant="secondary" onClick={goBack} fullWidth disabled={isFirstStep || isSubmitting}>
                 Back
@@ -285,6 +318,44 @@ export function AlertSubscriptionFlow({
           </div>
         ) : null}
       </section>
+    </div>
+  )
+}
+
+function AlertProgress({
+  steps,
+  currentStep,
+  onSelectStep,
+}: {
+  steps: typeof alertSteps
+  currentStep: AlertFlowStep
+  onSelectStep: (step: AlertFlowStep) => void
+}) {
+  const currentIndex = steps.findIndex((step) => step.id === currentStep)
+
+  return (
+    <div className="pawlink-alert-progress">
+      {steps.map((step, index) => {
+        const isCurrent = step.id === currentStep
+        const isComplete = index < currentIndex
+        return (
+          <button
+            key={step.id}
+            type="button"
+            onClick={() => onSelectStep(step.id)}
+            className="pawlink-alert-progress-step text-left focus:outline-none focus:ring-4 focus:ring-violet-100"
+            data-current={isCurrent ? 'true' : undefined}
+            data-complete={isComplete ? 'true' : undefined}
+            aria-current={isCurrent ? 'step' : undefined}
+          >
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white text-xs font-black text-violet-700 shadow-sm">
+              {isComplete ? '✓' : index + 1}
+            </span>
+            <span className="mt-2 block text-xs font-black text-slate-950">{step.label}</span>
+            <span className="mt-1 block text-[11px] leading-4 text-slate-500">{step.description}</span>
+          </button>
+        )
+      })}
     </div>
   )
 }

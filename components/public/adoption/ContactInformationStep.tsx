@@ -6,7 +6,7 @@ import type { AdoptionStepProps } from '@/components/public/adoption/types'
 
 export function ContactInformationStep({ form, errors, updateField }: AdoptionStepProps) {
   return (
-    <div className="space-y-4">
+    <div className="public-form-stack">
       <div className="grid gap-3 sm:grid-cols-2">
         <Field id="first-name" label="First name" error={errors.first_name}>
           <input

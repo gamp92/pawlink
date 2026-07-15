@@ -13,7 +13,7 @@ type Props = {
 
 export function AlertLocationStep({ form, errors, updateField }: Props) {
   return (
-    <div className="space-y-4">
+    <div className="public-form-stack">
       <MapLocationPicker
         value={form.location}
         onChange={(location) => updateField('location', location)}

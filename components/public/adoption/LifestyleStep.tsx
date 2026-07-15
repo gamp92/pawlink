@@ -13,7 +13,7 @@ import type {
 
 export function LifestyleStep({ form, errors, updateField }: AdoptionStepProps) {
   return (
-    <div className="space-y-4">
+    <div className="public-form-stack">
       <SegmentedControl<ActivityLevel>
         label="Activity level"
         value={form.activity_level}

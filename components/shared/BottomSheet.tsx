@@ -20,7 +20,7 @@ export function BottomSheet({ children, open, onClose, title, className = '' }: 
             {onClose ? (
               <button
                 onClick={onClose}
-                className="grid h-10 w-10 place-items-center rounded-full border border-slate-200 bg-white text-sm font-black text-slate-500"
+                className="ds-icon-button h-10 w-10 text-sm font-black"
                 aria-label="Close panel"
               >
                 x
