@@ -22,11 +22,13 @@ flowchart TB
             hub["/dashboard/*<br/>F1 Shelter Hub (private)"]
             findapet["/find-a-pet + /shelter/[id]<br/>F2 Smart Adoption (public)"]
             lostfound["/lost-found<br/>F3 Lost & Found (public)"]
+            assistant["ShelterAssistant widget<br/>F4 RAG (public, in /shelter/[id])"]
         end
         subgraph api["/api/* — Vercel Functions (10s limit)"]
             apiCrud["animals · shelters ·<br/>adoption-requests · lost-found ·<br/>alert-subscriptions"]
             apiMatching["matching"]
             apiVision["vision"]
+            apiRag["rag/query · rag/documents<br/>(proxy)"]
         end
     end
 
@@ -46,21 +48,25 @@ flowchart TB
         groq["Groq API<br/>Llama 3 8B"]
         rekognition["AWS Rekognition"]
         resend["Resend<br/>email API"]
+        ragService["pawlink-rag service<br/>(separate repo, Python)"]
     end
 
     shelter --> hub
     public --> findapet
     public --> lostfound
+    public --> assistant
 
     hub --> api
     findapet --> api
     lostfound --> api
+    assistant --> apiRag
 
     hub -->|login| auth
     api --> db
     api --> storage
     apiMatching --> groq
     apiVision --> rekognition
+    apiRag -->|X-Internal-Key| ragService
 
     db --> webhooks
     webhooks --> edge
@@ -155,6 +161,23 @@ flowchart LR
     F3 --> subDelete -->|deletes by token| tSubs
 ```
 
+### F4 — RAG Shelter Assistant (chat widget in `/shelter/[id]`, public)
+
+```mermaid
+flowchart LR
+    F4["ShelterAssistant<br/>widget"]
+
+    ragQuery["POST /api/rag/query"]
+    ragDocs["GET /api/rag/documents<br/>?shelter_id"]
+
+    ragService["pawlink-rag service<br/>(separate repo)"]
+
+    F4 --> ragQuery -->|"proxy, streams SSE back"| ragService
+    F4 --> ragDocs -->|"proxy, lists indexed docs"| ragService
+```
+
+The RAG endpoints are **pure proxies** — they touch no Supabase table in this repo. They exist so the `RAG_INTERNAL_API_KEY` stays server-side; the actual retrieval/generation pipeline lives in the separate `pawlink-rag` service (`RAG_SERVICE_URL`). The F4 tables in `schema.sql` remain commented out — document storage is the service's concern.
+
 ⚡ = the write fires a Database Webhook that triggers the Edge Function named next to it (see section 4).
 
 Full reference table:
@@ -176,6 +199,8 @@ Full reference table:
 | F3 | `POST /api/vision` | `lost_found_reports` (photos) | `lost_found_reports` (match fields, both rows) | AWS Rekognition |
 | F3 | `POST /api/alert-subscriptions` | — | `alert_subscriptions` (upsert by email) | — |
 | F3 | `GET /api/alert-subscriptions/unsubscribe` | — | `alert_subscriptions` (delete by token) | — |
+| F4 | `POST /api/rag/query` | — | — | pawlink-rag (SSE) |
+| F4 | `GET /api/rag/documents` | — | — | pawlink-rag |
 | debug | `POST /api/lost-found/alert` | `alert_subscriptions` (RPC `get_users_near_report`) | — | — |
 
 `POST /api/lost-found/alert` is a debug-only endpoint kept for manually verifying the PostGIS radius query — it does not send emails (the geo-alert Edge Function owns that).
