@@ -93,7 +93,7 @@ Triggers two side effects: geo-alert to nearby users and vision matching.
 ```
 
 **Side effects on creation:**
-1. Supabase Database Webhook triggers `geo-alert` Edge Function → calls `get_users_near_report()` PostGIS function → sends email alerts to users within 2km via Resend
+1. Supabase Database Webhook triggers `geo-alert` Edge Function → calls `get_users_near_report()` PostGIS function → sends email alerts to alert subscribers within 2km via Resend (see Alert Subscriptions below)
 2. `/api/vision` is called automatically to compare against existing open reports
 
 ---
@@ -184,14 +184,52 @@ The `geo-alert` Edge Function handles this automatically on report creation; thi
 ```json
 {
   "alerted_users": [
-    { "user_id": "uuid", "email": "test+near@gmail.com", "distance_m": 400 },
-    { "user_id": "uuid", "email": "test+mid@gmail.com",  "distance_m": 1200 }
+    { "subscription_id": "uuid", "email": "test+near@gmail.com", "distance_m": 400 },
+    { "subscription_id": "uuid", "email": "test+mid@gmail.com",  "distance_m": 1200 }
   ],
   "total": 2
 }
 ```
 
 **Notes:**
-- Calls `get_users_near_report()` PostgreSQL function defined in schema.sql
-- The reporter is excluded from the alert list automatically
-- The `geo-alert` Edge Function handles emailing automatically — this endpoint only returns the user list
+- Calls `get_users_near_report()` PostgreSQL function defined in schema.sql, which queries `alert_subscriptions`
+- Unsubscribe tokens are stripped from this response — they must never leave the server except inside alert emails
+- The `geo-alert` Edge Function handles emailing automatically — this endpoint only returns the subscriber list
+
+---
+
+## Alert Subscriptions
+
+### POST /api/alert-subscriptions
+Subscribes an email to lost/found alerts around a map point. No account needed.
+One subscription per email — posting again with the same email updates the zone (upsert).
+
+**Request body:**
+```json
+{
+  "email": "ana@gmail.com",
+  "full_name": "Ana García",
+  "city": "CDMX",
+  "location": { "lat": 19.4117, "lng": -99.1727 }
+}
+```
+
+**Validation:**
+- `email` required, valid format, max 255 chars — stored lowercased
+- `location.lat` / `location.lng` required numbers, within [-90, 90] / [-180, 180]
+- `full_name` optional, max 120 chars; `city` optional, max 120 chars
+
+**Response 201:**
+```json
+{
+  "subscription": { "id": "uuid", "email": "ana@gmail.com", "created_at": "..." },
+  "message": "Subscribed. You'll get an email when a pet is reported near you."
+}
+```
+
+### GET /api/alert-subscriptions/unsubscribe?token=<uuid>
+Deletes the subscription matching the token. Linked from every alert email.
+
+**Response 200:** `{ "message": "You will no longer receive alerts." }`
+**Response 400:** missing or malformed token
+**Response 404:** unknown token (already unsubscribed or never existed)
