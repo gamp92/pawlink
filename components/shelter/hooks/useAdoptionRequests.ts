@@ -20,6 +20,7 @@ export function useAdoptionRequests({ shelterId }: UseAdoptionRequestsOptions) {
   const [isFallback, setIsFallback] = useState(false)
   const [pendingRequestIds, setPendingRequestIds] = useState<Set<string>>(new Set())
   const requestIdRef = useRef(0)
+  const mutationVersionRef = useRef<Record<string, number>>({})
 
   const setRequestPending = useCallback((requestId: string, pending: boolean) => {
     setPendingRequestIds((current) => {
@@ -53,21 +54,31 @@ export function useAdoptionRequests({ shelterId }: UseAdoptionRequestsOptions) {
   const updateRequestStatus = useCallback(
     async (requestId: string, payload: PatchAdoptionRequestPayload) => {
       const previousData = data
+      const mutationVersion = (mutationVersionRef.current[requestId] ?? 0) + 1
+      mutationVersionRef.current[requestId] = mutationVersion
       setMutationError(null)
       setRequestPending(requestId, true)
       setData((current) =>
         current.map((request) =>
-          request.id === requestId ? { ...request, status: payload.status, notes: payload.notes } : request,
+          request.id === requestId
+            ? { ...request, status: payload.status, notes: payload.notes ?? request.notes }
+            : request,
         ),
       )
 
       try {
         await patchAdoptionRequest(requestId, payload)
+        return true
       } catch (error) {
-        setData(previousData)
-        setMutationError(error instanceof Error ? error.message : 'Could not update adoption request')
+        if (mutationVersionRef.current[requestId] === mutationVersion) {
+          setData(previousData)
+          setMutationError(error instanceof Error ? error.message : 'Could not update adoption request')
+        }
+        return false
       } finally {
-        setRequestPending(requestId, false)
+        if (mutationVersionRef.current[requestId] === mutationVersion) {
+          setRequestPending(requestId, false)
+        }
       }
     },
     [data, setRequestPending],

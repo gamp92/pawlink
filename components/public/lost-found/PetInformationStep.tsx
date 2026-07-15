@@ -1,14 +1,11 @@
+import { useState } from 'react'
 import {
   Field,
   inputClassName,
   SegmentedControl,
   textareaClassName,
 } from '@/components/public/lost-found/form-controls'
-import type {
-  LostFoundReportForm,
-  PetSex,
-  PetSize,
-} from '@/components/public/lost-found/types'
+import type { LostFoundReportForm } from '@/components/public/lost-found/types'
 import type { ReportType, Species } from '@/lib/mock-data'
 
 type Props = {
@@ -21,6 +18,8 @@ type Props = {
 }
 
 export function PetInformationStep({ form, errors, updateField }: Props) {
+  const [showMoreDetails, setShowMoreDetails] = useState(Boolean(form.pet_name || form.breed))
+
   return (
     <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
       <aside className="lg:sticky lg:top-2 lg:self-start">
@@ -41,7 +40,7 @@ export function PetInformationStep({ form, errors, updateField }: Props) {
               {form.pet_name || (form.report_type === 'found' ? 'Unknown pet' : 'Pet name')}
             </h3>
             <p className="mt-1 text-sm font-semibold text-slate-500">
-              {[form.breed || 'Breed', form.color || 'color', form.size || 'size'].join(' - ')}
+              {[form.species || 'Species', form.breed || 'breed optional', form.color || 'color'].join(' - ')}
             </p>
             <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">
               {form.description || 'Add a short description so neighbors know what to look for.'}
@@ -62,16 +61,6 @@ export function PetInformationStep({ form, errors, updateField }: Props) {
           onChange={(value) => updateField('report_type', value)}
         />
 
-        <Field id="pet-name" label="Pet name optional" error={errors.pet_name}>
-          <input
-            id="pet-name"
-            value={form.pet_name}
-            onChange={(event) => updateField('pet_name', event.target.value)}
-            className={inputClassName}
-            placeholder={form.report_type === 'found' ? 'Unknown is okay' : ''}
-          />
-        </Field>
-
         <SegmentedControl<Species>
           label="Species"
           value={form.species}
@@ -84,68 +73,65 @@ export function PetInformationStep({ form, errors, updateField }: Props) {
           error={errors.species}
         />
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field id="pet-breed" label="Breed optional" error={errors.breed}>
-            <input
-              id="pet-breed"
-              value={form.breed}
-              onChange={(event) => updateField('breed', event.target.value)}
-              className={inputClassName}
-            />
-          </Field>
-          <Field id="pet-color" label="Color" error={errors.color}>
-            <input
-              id="pet-color"
-              value={form.color}
-              onChange={(event) => updateField('color', event.target.value)}
-              className={inputClassName}
-            />
-          </Field>
-        </div>
-
-        <SegmentedControl<PetSize>
-          label="Size"
-          value={form.size}
-          options={[
-            { label: 'Small', value: 'small' },
-            { label: 'Medium', value: 'medium' },
-            { label: 'Large', value: 'large' },
-          ]}
-          onChange={(value) => updateField('size', value)}
-          error={errors.size}
-        />
-
-        <SegmentedControl<PetSex>
-          label="Sex optional"
-          value={form.sex}
-          options={[
-            { label: 'Female', value: 'female' },
-            { label: 'Male', value: 'male' },
-            { label: 'Unknown', value: 'unknown' },
-          ]}
-          onChange={(value) => updateField('sex', value)}
-          error={errors.sex}
-        />
-
-        <Field id="date-lost-seen" label="Date lost or seen" error={errors.date_lost_or_seen}>
+        <Field id="pet-color" label="Color" error={errors.color}>
           <input
-            id="date-lost-seen"
-            type="date"
-            value={form.date_lost_or_seen}
-            onChange={(event) => updateField('date_lost_or_seen', event.target.value)}
+            id="pet-color"
+            value={form.color}
+            onChange={(event) => updateField('color', event.target.value)}
             className={inputClassName}
+            placeholder="Brown, white paws, orange tabby..."
           />
         </Field>
 
-        <Field id="pet-description" label="Description" error={errors.description}>
+        <Field id="pet-description" label="Short description" error={errors.description}>
           <textarea
             id="pet-description"
             value={form.description}
             onChange={(event) => updateField('description', event.target.value)}
             className={textareaClassName}
-            placeholder="Collar, temperament, markings, health details, or how to approach safely."
+            placeholder="Collar, markings, temperament, health details, or how to approach safely."
           />
         </Field>
+
+        <div className="rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setShowMoreDetails((current) => !current)}
+            className="flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl px-2 text-left focus:outline-none focus:ring-4 focus:ring-violet-100"
+            aria-expanded={showMoreDetails}
+          >
+            <span>
+              <span className="block text-sm font-black text-slate-950">Add more identifying details</span>
+              <span className="mt-1 block text-xs font-semibold text-slate-500">Name and breed can help neighbors recognize the pet faster.</span>
+            </span>
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-slate-100 text-sm font-black text-slate-600">
+              {showMoreDetails ? '-' : '+'}
+            </span>
+          </button>
+
+          {showMoreDetails ? (
+            <div className="mt-3 grid gap-3 border-t border-slate-100 pt-3 sm:grid-cols-2">
+              <Field id="pet-name" label="Pet name optional" error={errors.pet_name}>
+                <input
+                  id="pet-name"
+                  value={form.pet_name}
+                  onChange={(event) => updateField('pet_name', event.target.value)}
+                  className={inputClassName}
+                  placeholder={form.report_type === 'found' ? 'Unknown is okay' : ''}
+                />
+              </Field>
+              <Field id="pet-breed" label="Breed optional" error={errors.breed}>
+                <input
+                  id="pet-breed"
+                  value={form.breed}
+                  onChange={(event) => updateField('breed', event.target.value)}
+                  className={inputClassName}
+                  placeholder="Persian, golden retriever, mixed..."
+                />
+              </Field>
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   )

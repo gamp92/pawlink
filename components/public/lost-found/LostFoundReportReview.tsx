@@ -11,6 +11,10 @@ type ReviewSection = {
   rows: Array<[string, string]>
 }
 
+function compactRows(rows: Array<[string, string | undefined | null]>) {
+  return rows.filter(([, value]) => Boolean(value?.trim())) as Array<[string, string]>
+}
+
 export function LostFoundReportReview({
   form,
   onEdit,
@@ -20,49 +24,30 @@ export function LostFoundReportReview({
 }) {
   const sections: ReviewSection[] = [
     {
-      title: 'Reporter',
-      step: 'reporter',
-      rows: [
-        ['Name', `${form.first_name} ${form.last_name}`],
-        ['Email', form.email],
-        ['Phone', form.phone || 'Not provided'],
-        ['Contact consent', form.contact_consent ? 'Confirmed' : 'Not confirmed'],
-      ],
-    },
-    {
       title: 'Pet and incident',
       step: 'pet',
-      rows: [
+      rows: compactRows([
         ['Report type', form.report_type],
-        ['Pet name', form.pet_name || 'Not provided'],
-        ['Species', form.species || 'Not answered'],
-        ['Breed', form.breed || 'Not provided'],
+        ['Pet name', form.pet_name],
+        ['Species', form.species],
+        ['Breed', form.breed],
         ['Color', form.color],
-        ['Size', form.size || 'Not answered'],
-        ['Sex', form.sex || 'Not provided'],
-        ['Date', form.date_lost_or_seen],
         ['Description', form.description],
-      ],
+      ]),
     },
     {
       title: 'Location',
       step: 'location',
-      rows: [
+      rows: compactRows([
         ['Description', form.location_notes],
+        ['City', form.city],
         [
           'Selected area',
           form.location
             ? `${form.location.label} near ${form.location.lat.toFixed(4)}, ${form.location.lng.toFixed(4)}`
-            : 'Not selected',
+            : undefined,
         ],
-      ],
-    },
-    {
-      title: 'Photos',
-      step: 'photos',
-      rows: [
-        ['Selected images', form.photos.length ? `${form.photos.length} image${form.photos.length === 1 ? '' : 's'}` : 'None'],
-      ],
+      ]),
     },
   ]
 
@@ -94,7 +79,7 @@ export function LostFoundReportReview({
       <Card className="rounded-[1.5rem] border-amber-200 bg-amber-50">
         <p className="text-sm font-black text-amber-800">Before submitting</p>
         <p className="mt-1 text-sm leading-6 text-slate-700">
-          Reports work best when contact information, location, and photos are accurate. Review carefully before continuing.
+          Reports work best when the description and map pin are accurate. Review carefully before continuing.
         </p>
       </Card>
     </div>

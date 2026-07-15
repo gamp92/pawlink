@@ -189,6 +189,8 @@ export function AdoptionApplicationFlow({
   }
 
   async function submitApplication() {
+    if (isSubmitting) return
+
     const payload = buildPayload()
     if (!payload) return
 

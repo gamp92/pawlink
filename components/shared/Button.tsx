@@ -1,4 +1,4 @@
-import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from 'react'
+import { forwardRef, type AnchorHTMLAttributes, type ButtonHTMLAttributes, type ReactNode, type Ref } from 'react'
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 type ButtonSize = 'sm' | 'md' | 'lg'
@@ -51,7 +51,10 @@ function getButtonClassName({
     .join(' ')
 }
 
-export function Button(props: ButtonProps | LinkButtonProps) {
+export const Button = forwardRef<HTMLButtonElement | HTMLAnchorElement, ButtonProps | LinkButtonProps>(function Button(
+  props,
+  ref,
+) {
   const { children, variant, size, fullWidth, className } = props
   const buttonClassName = getButtonClassName({ variant, size, fullWidth, className })
 
@@ -59,7 +62,7 @@ export function Button(props: ButtonProps | LinkButtonProps) {
     const linkButtonProps = props as LinkButtonProps
     const { children: linkChildren, variant: _variant, size: _size, fullWidth: _fullWidth, className: _className, ...linkProps } = linkButtonProps
     return (
-      <a {...linkProps} className={buttonClassName}>
+      <a {...linkProps} ref={ref as Ref<HTMLAnchorElement>} className={buttonClassName}>
         {linkChildren}
       </a>
     )
@@ -68,8 +71,8 @@ export function Button(props: ButtonProps | LinkButtonProps) {
   const standardButtonProps = props as ButtonProps
   const { children: buttonChildren, variant: _variant, size: _size, fullWidth: _fullWidth, className: _className, ...buttonProps } = standardButtonProps
   return (
-    <button {...buttonProps} className={buttonClassName}>
+    <button {...buttonProps} ref={ref as Ref<HTMLButtonElement>} className={buttonClassName}>
       {buttonChildren}
     </button>
   )
-}
+})

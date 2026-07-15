@@ -1,7 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/shared/Button'
 import { Card } from '@/components/shared/Card'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -10,6 +9,11 @@ import { LoadingState } from '@/components/shared/LoadingState'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { getAnimalDisplayImage } from '@/components/shared/pet-display-image'
 import { AdoptionApplicationFlow } from '@/components/public/adoption/AdoptionApplicationFlow'
+import {
+  requestSmartMatches,
+  type MatchingApiAnimalResult,
+  type MatchingApiPayload,
+} from '@/components/public/adoption/matching-adapter'
 import { animals as mockAnimals, type Animal, type Species } from '@/lib/mock-data'
 
 type LivingSpace = 'apartment' | 'house_no_yard' | 'house_yard'
@@ -18,7 +22,7 @@ type Experience = 'none' | 'some' | 'experienced'
 type SizeFilter = 'all' | Animal['size']
 type EnergyFilter = 'all' | Animal['energy_level']
 type SpeciesFilter = 'all' | Species
-type ProfileSection = 'home' | 'time' | 'experience' | 'activity' | 'children' | 'pets' | 'preferences'
+type ProfileSection = 'home' | 'time' | 'experience' | 'children' | 'pets'
 type SortOption = 'best_match' | 'newest' | 'age'
 
 type FamilyProfile = {
@@ -41,6 +45,11 @@ type MatchResult = {
   animal: Animal
   score: number
   reasons: string[]
+}
+
+type SmartMatchState = {
+  key: string
+  results: MatchResult[]
 }
 
 type ApiAnimal = {
@@ -99,12 +108,22 @@ const filterChips: Array<{
     apply: (filters) => ({ ...filters, size: filters.size === 'small' ? 'all' : 'small' }),
   },
   {
+    label: 'Medium',
+    isActive: (filters) => filters.size === 'medium',
+    apply: (filters) => ({ ...filters, size: filters.size === 'medium' ? 'all' : 'medium' }),
+  },
+  {
+    label: 'Large',
+    isActive: (filters) => filters.size === 'large',
+    apply: (filters) => ({ ...filters, size: filters.size === 'large' ? 'all' : 'large' }),
+  },
+  {
     label: 'Low energy',
     isActive: (filters) => filters.energy_level === 'low',
     apply: (filters) => ({ ...filters, energy_level: filters.energy_level === 'low' ? 'all' : 'low' }),
   },
   {
-    label: 'Kid friendly',
+    label: 'Good with kids',
     isActive: (filters) => filters.good_with_kids,
     apply: (filters) => ({ ...filters, good_with_kids: !filters.good_with_kids }),
   },
@@ -208,19 +227,14 @@ function scoreAnimal(animal: Animal, profile: FamilyProfile): MatchResult {
   }
 }
 
-function matchesFilters(result: MatchResult, filters: Filters, query: string) {
+function matchesFilters(result: MatchResult, filters: Filters) {
   const { animal } = result
-  const normalizedQuery = query.trim().toLowerCase()
   if (filters.species !== 'all' && animal.species !== filters.species) return false
   if (filters.size !== 'all' && animal.size !== filters.size) return false
   if (filters.energy_level !== 'all' && animal.energy_level !== filters.energy_level) return false
   if (filters.good_with_kids && !animal.good_with_kids) return false
   if (filters.good_with_pets && !animal.good_with_pets) return false
-  if (!normalizedQuery) return true
-  return [animal.name, animal.breed, animal.species, animal.shelter.name]
-    .join(' ')
-    .toLowerCase()
-    .includes(normalizedQuery)
+  return true
 }
 
 function toAnimal(apiAnimal: ApiAnimal): Animal {
@@ -245,24 +259,61 @@ function toAnimal(apiAnimal: ApiAnimal): Animal {
   }
 }
 
-function profileSummary(profile: FamilyProfile) {
-  const livingSpaceLabels: Record<LivingSpace, string> = {
-    apartment: 'Apartment',
-    house_no_yard: 'House',
-    house_yard: 'House + yard',
-  }
-  const lifestyleLabels: Record<Lifestyle, string> = {
-    sedentary: 'Quiet activity',
-    moderate: 'Moderate activity',
-    active: 'Active routine',
-  }
-  const experienceLabels: Record<Experience, string> = {
-    none: 'First pet',
-    some: 'Some experience',
-    experienced: 'Experienced',
-  }
+function toAnimalFromMatchingResult(apiResult: MatchingApiAnimalResult, availableAnimals: Animal[]): Animal {
+  const existingAnimal = availableAnimals.find((animal) => animal.id === apiResult.animal.id)
+  if (existingAnimal) return existingAnimal
 
-  return `${livingSpaceLabels[profile.living_space]} · ${lifestyleLabels[profile.lifestyle]} · ${experienceLabels[profile.experience]}`
+  return {
+    id: apiResult.animal.id,
+    name: apiResult.animal.name,
+    species: apiResult.animal.species,
+    breed: apiResult.animal.breed ?? 'Mixed',
+    age_years: Number(apiResult.animal.age_years ?? 0),
+    size: 'medium',
+    gender: 'female',
+    status: 'available',
+    color: 'unknown',
+    description: `${apiResult.animal.name} is available for adoption through ${apiResult.animal.shelter?.name ?? 'a partner shelter'}.`,
+    energy_level: 'medium',
+    good_with_kids: false,
+    good_with_pets: false,
+    photo_urls: apiResult.animal.photo_urls ?? [],
+    social_post: null,
+    shelter: apiResult.animal.shelter
+      ? {
+          id: apiResult.animal.shelter.id,
+          name: apiResult.animal.shelter.name,
+          city: apiResult.animal.shelter.city ?? 'CDMX',
+        }
+      : { id: 'unknown-shelter', name: 'Partner shelter', city: 'CDMX' },
+    created_at: '',
+  }
+}
+
+function toMatchResults(apiResults: MatchingApiAnimalResult[], availableAnimals: Animal[]): MatchResult[] {
+  return apiResults.map((result) => ({
+    animal: toAnimalFromMatchingResult(result, availableAnimals),
+    score: Math.max(0, Math.min(100, Math.round(result.compatibility_score))),
+    reasons: result.compatibility_reasons.filter(Boolean).slice(0, 3),
+  }))
+}
+
+function getMatchingKey(profile: FamilyProfile) {
+  return JSON.stringify({
+    family_profile: profile,
+  })
+}
+
+function buildMatchingPayload(profile: FamilyProfile): MatchingApiPayload {
+  return {
+    family_profile: {
+      living_space: profile.living_space,
+      lifestyle: profile.lifestyle,
+      experience: profile.experience,
+      has_children: profile.has_children,
+      has_other_pets: profile.has_other_pets,
+    },
+  }
 }
 
 function activeFilterCount(filters: Filters) {
@@ -280,16 +331,20 @@ export function SmartAdoption() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isUsingFallback, setIsUsingFallback] = useState(false)
+  const [smartMatches, setSmartMatches] = useState<SmartMatchState | null>(null)
+  const [isMatching, setIsMatching] = useState(false)
+  const [matchingNotice, setMatchingNotice] = useState<string | null>(null)
   const [profile, setProfile] = useState<FamilyProfile>(initialProfile)
   const [filters, setFilters] = useState<Filters>(initialFilters)
-  const [query, setQuery] = useState('')
   const [sortBy, setSortBy] = useState<SortOption>('best_match')
   const [selectedId, setSelectedId] = useState(fallbackAvailableAnimals[0]?.id ?? '')
   const [isApplicationOpen, setIsApplicationOpen] = useState(false)
-  const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false)
   const [openSection, setOpenSection] = useState<ProfileSection>('home')
+  const [hasMatched, setHasMatched] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+  const matchingAbortRef = useRef<AbortController | null>(null)
+  const matchingRequestIdRef = useRef(0)
 
   useEffect(() => {
     let isMounted = true
@@ -336,11 +391,28 @@ export function SmartAdoption() {
     }
   }, [])
 
+  useEffect(() => {
+    return () => {
+      matchingAbortRef.current?.abort()
+    }
+  }, [])
+
+  const matchingKey = useMemo(() => getMatchingKey(profile), [profile])
+
+  const localMatchResults = useMemo(
+    () => {
+      return availableAnimals.map((animal) => scoreAnimal(animal, profile))
+    },
+    [availableAnimals, profile],
+  )
+
+  const activeSmartMatches = smartMatches?.key === matchingKey ? smartMatches.results : null
+  const isUsingSmartMatches = Boolean(activeSmartMatches)
+
   const matchResults = useMemo(
     () => {
-      const results = availableAnimals
-        .map((animal) => scoreAnimal(animal, profile))
-        .filter((result) => matchesFilters(result, filters, query))
+      const sourceResults = activeSmartMatches ?? localMatchResults
+      const results = sourceResults.filter((result) => matchesFilters(result, filters))
 
       return [...results].sort((a, b) => {
         if (sortBy === 'newest') {
@@ -352,7 +424,7 @@ export function SmartAdoption() {
         return b.score - a.score
       })
     },
-    [availableAnimals, filters, profile, query, sortBy],
+    [activeSmartMatches, filters, localMatchResults, sortBy],
   )
 
   useEffect(() => {
@@ -362,17 +434,17 @@ export function SmartAdoption() {
   }, [matchResults, selectedId])
 
   const totalPages = Math.max(1, Math.ceil(matchResults.length / petsPerPage))
-  const currentPageResults = matchResults.slice((currentPage - 1) * petsPerPage, currentPage * petsPerPage)
-  const selectedMatch = matchResults.find((result) => result.animal.id === selectedId) ?? matchResults[0]
+  const visibleResults = hasMatched
+    ? matchResults.slice((currentPage - 1) * petsPerPage, currentPage * petsPerPage)
+    : []
+  const selectedMatch = hasMatched ? matchResults.find((result) => result.animal.id === selectedId) ?? matchResults[0] : undefined
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [filters, query, sortBy])
+  }, [filters, sortBy])
 
   useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages)
-    }
+    if (currentPage > totalPages) setCurrentPage(totalPages)
   }, [currentPage, totalPages])
 
   function updateProfile<Key extends keyof FamilyProfile>(key: Key, value: FamilyProfile[Key]) {
@@ -395,6 +467,45 @@ export function SmartAdoption() {
 
   function clearFilters() {
     setFilters(initialFilters)
+  }
+
+  async function updateSmartMatches() {
+    const requestId = matchingRequestIdRef.current + 1
+    matchingRequestIdRef.current = requestId
+    matchingAbortRef.current?.abort()
+
+    const controller = new AbortController()
+    matchingAbortRef.current = controller
+    const requestKey = getMatchingKey(profile)
+
+    setIsMatching(true)
+    setMatchingNotice(null)
+
+    const result = await requestSmartMatches(buildMatchingPayload(profile), {
+      signal: controller.signal,
+    })
+
+    if (matchingRequestIdRef.current !== requestId) return
+
+    setIsMatching(false)
+    matchingAbortRef.current = null
+
+    if (!result.ok) {
+      if (result.message === 'Smart matching was cancelled.') return
+      setSmartMatches(null)
+      setHasMatched(true)
+      setCurrentPage(1)
+      setMatchingNotice(`${result.message} Using local matching while smart matching is unavailable.`)
+      return
+    }
+
+    setSmartMatches({
+      key: requestKey,
+      results: toMatchResults(result.data.results, availableAnimals),
+    })
+    setHasMatched(true)
+    setCurrentPage(1)
+    setMatchingNotice(null)
   }
 
   function goToResultsPage(page: number) {
@@ -425,43 +536,64 @@ export function SmartAdoption() {
         </div>
       </header>
 
-      <section className="pawlink-adoption-search-panel sticky top-0 z-20 -mx-4 px-4 py-4 backdrop-blur md:static md:mx-0">
-        <PetSearchBar value={query} onChange={setQuery} />
-        <PetFilterChips
-          filters={filters}
-          activeCount={activeFilterCount(filters)}
-          onApply={applyFilter}
-          onClear={clearFilters}
-          onMoreFilters={() => setIsProfileOpen(true)}
-        />
-      </section>
-
-      <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px]">
-        <main className="min-w-0 space-y-7">
+      <div className={`mt-10 grid gap-10 ${hasMatched ? 'lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px]' : ''}`}>
+        <main className="min-w-0 space-y-9">
           <MatchProfileCard
             profile={profile}
-            filters={filters}
-            open={isProfileOpen}
             activeSection={openSection}
-            onToggle={() => setIsProfileOpen((current) => !current)}
+            isMatching={isMatching}
+            isUsingSmartMatches={isUsingSmartMatches}
+            hasMatched={hasMatched}
             onSectionChange={setOpenSection}
             onProfileChange={updateProfile}
-            onFiltersChange={setFilters}
+            onUpdateMatches={updateSmartMatches}
           />
 
-          <PetResultsToolbar
-            count={matchResults.length}
-            currentPage={currentPage}
-            totalPages={totalPages}
-            sortBy={sortBy}
-            onSortChange={setSortBy}
-          />
+          {hasMatched ? (
+            <PetResultsToolbar
+              count={matchResults.length}
+              shownCount={visibleResults.length}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              sortBy={sortBy}
+              isMatching={isMatching}
+              isUsingSmartMatches={isUsingSmartMatches}
+              filters={filters}
+              activeFilterCount={activeFilterCount(filters)}
+              onSortChange={setSortBy}
+              onApplyFilter={applyFilter}
+              onClearFilters={clearFilters}
+            />
+          ) : null}
 
-          {error ? <ErrorState title="Using fallback pets" description={error} /> : null}
+          {error ? (
+            <div className="mt-3">
+              <ErrorState title="Using fallback pets" description={error} />
+            </div>
+          ) : null}
+
+          {matchingNotice ? (
+            <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-800 shadow-sm">
+              <span>{matchingNotice}</span>
+            </div>
+          ) : null}
+
+          {isMatching ? (
+            <div className="mt-4 rounded-2xl border border-violet-100 bg-violet-50 p-4 text-sm font-bold text-violet-800 shadow-sm">
+              Updating matches with the shelter assistant. Current results remain available while we refresh.
+            </div>
+          ) : null}
 
           {isLoading ? <LoadingState label="Finding available pets" /> : null}
 
-          {!isLoading && matchResults.length === 0 ? (
+          {!hasMatched && !isLoading && !isMatching ? (
+            <EmptyState
+              title="Ready when you are"
+              description="Answer the five profile questions, then find ranked matches in one step."
+            />
+          ) : null}
+
+          {hasMatched && !isLoading && matchResults.length === 0 ? (
             <EmptyState
               title="No matches found"
               description="Try clearing your search or relaxing one filter to see more adoptable animals."
@@ -469,19 +601,21 @@ export function SmartAdoption() {
             />
           ) : null}
 
-          <div className="pawlink-adoption-results-grid">
-            {currentPageResults.map((result) => (
-              <AdoptionPetCard
-                key={result.animal.id}
-                animal={result.animal}
-                score={result.score}
-                selected={selectedId === result.animal.id}
-                onSelect={() => selectMatch(result.animal.id)}
-              />
-            ))}
-          </div>
+          {hasMatched ? (
+            <div className="pawlink-adoption-results-grid">
+              {visibleResults.map((result) => (
+                <AdoptionPetCard
+                  key={result.animal.id}
+                  animal={result.animal}
+                  score={result.score}
+                  selected={selectedId === result.animal.id}
+                  onSelect={() => selectMatch(result.animal.id)}
+                />
+              ))}
+            </div>
+          ) : null}
 
-          {matchResults.length > petsPerPage ? (
+          {hasMatched && matchResults.length > petsPerPage ? (
             <ResultsPagination
               currentPage={currentPage}
               totalPages={totalPages}
@@ -490,9 +624,11 @@ export function SmartAdoption() {
           ) : null}
         </main>
 
-        <aside className="hidden lg:block">
-          <DetailPanel match={selectedMatch} onRequest={requestSelectedAnimal} />
-        </aside>
+        {hasMatched ? (
+          <aside className="hidden lg:block">
+            <DetailPanel match={selectedMatch} onRequest={requestSelectedAnimal} />
+          </aside>
+        ) : null}
       </div>
 
       {selectedMatch ? (
@@ -531,47 +667,16 @@ export function SmartAdoption() {
   )
 }
 
-function PetSearchBar({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  return (
-    <label className="block">
-      <span className="sr-only">Search pets</span>
-      <div className="pawlink-adoption-search">
-        <span className="pawlink-adoption-search-icon" aria-hidden="true">
-          ⌕
-        </span>
-        <input
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="Search pets by name, breed, species, or shelter"
-          className="pawlink-adoption-search-input"
-        />
-        {value ? (
-          <button
-            type="button"
-            onClick={() => onChange('')}
-            className="pawlink-adoption-search-clear"
-            aria-label="Clear search"
-          >
-            x
-          </button>
-        ) : null}
-      </div>
-    </label>
-  )
-}
-
 function PetFilterChips({
   filters,
   activeCount,
   onApply,
   onClear,
-  onMoreFilters,
 }: {
   filters: Filters
   activeCount: number
   onApply: (update: (current: Filters) => Filters) => void
   onClear: () => void
-  onMoreFilters: () => void
 }) {
   return (
     <div className="mt-4">
@@ -601,14 +706,6 @@ function PetFilterChips({
               Clear {activeCount}
             </button>
           ) : null}
-          <button
-            type="button"
-            onClick={onMoreFilters}
-            className="pawlink-adoption-chip"
-            aria-label="Open match profile filters"
-          >
-            More filters
-          </button>
         </div>
       </div>
     </div>
@@ -617,22 +714,22 @@ function PetFilterChips({
 
 function MatchProfileCard({
   profile,
-  filters,
-  open,
   activeSection,
-  onToggle,
+  isMatching,
+  isUsingSmartMatches,
+  hasMatched,
   onSectionChange,
   onProfileChange,
-  onFiltersChange,
+  onUpdateMatches,
 }: {
   profile: FamilyProfile
-  filters: Filters
-  open: boolean
   activeSection: ProfileSection
-  onToggle: () => void
+  isMatching: boolean
+  isUsingSmartMatches: boolean
+  hasMatched: boolean
   onSectionChange: (section: ProfileSection) => void
   onProfileChange: <Key extends keyof FamilyProfile>(key: Key, value: FamilyProfile[Key]) => void
-  onFiltersChange: (filters: Filters) => void
+  onUpdateMatches: () => void
 }) {
   const currentStepIndex = matchProfileSteps.findIndex((step) => step.id === activeSection)
   const progress = ((currentStepIndex + 1) / matchProfileSteps.length) * 100
@@ -655,14 +752,11 @@ function MatchProfileCard({
         <div className="min-w-0 flex-1">
           <p className="text-xs font-black text-violet-700">Your Match Profile</p>
           <h3 className="mt-1 text-2xl font-black leading-none text-slate-950">Let Pawlink learn your home</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{matchProfileInsight(profile, filters)}</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{matchProfileInsight(profile)}</p>
         </div>
-        <Button type="button" size="sm" variant="secondary" onClick={onToggle} aria-expanded={open}>
-          {open ? 'Done' : 'Tune match'}
-        </Button>
       </div>
 
-      <div className="mt-5 grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+      <div className="mt-5">
         <div>
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs font-black text-slate-500">Profile strength</p>
@@ -672,67 +766,73 @@ function MatchProfileCard({
             <div className="pawlink-match-progress-bar" style={{ width: `${progress}%` }} />
           </div>
         </div>
-        <div className="pawlink-match-summary-chip">{profileSummary(profile)}</div>
       </div>
+      {isUsingSmartMatches || hasMatched ? (
+        <p className="mt-3 text-xs font-bold text-slate-500">
+          {isUsingSmartMatches
+            ? 'Smart matching is active for this profile.'
+            : 'Local fallback is active until smart matching is available.'}
+        </p>
+      ) : null}
 
-      {open ? (
-        <div className="pawlink-match-onboarding">
-          <div className="pawlink-match-stepper" aria-label="Match profile questions">
-            {matchProfileSteps.map((step, index) => {
-              const isActive = step.id === activeSection
-              const isComplete = index < currentStepIndex
-              return (
-              <button
-                key={step.id}
-                type="button"
-                onClick={() => onSectionChange(step.id)}
-                aria-current={isActive ? 'step' : undefined}
-                data-active={isActive}
-                data-complete={isComplete}
-              >
-                <span>{isComplete ? 'OK' : index + 1}</span>
-                <strong>{step.shortLabel}</strong>
-              </button>
-              )
-            })}
+      <div className="pawlink-match-onboarding">
+        <div className="pawlink-match-stepper" aria-label="Match profile questions">
+          {matchProfileSteps.map((step, index) => {
+            const isActive = step.id === activeSection
+            const isComplete = index < currentStepIndex
+            return (
+            <button
+              key={step.id}
+              type="button"
+              onClick={() => onSectionChange(step.id)}
+              aria-current={isActive ? 'step' : undefined}
+              data-active={isActive}
+              data-complete={isComplete}
+            >
+              <span>{isComplete ? 'OK' : index + 1}</span>
+              <strong>{step.shortLabel}</strong>
+            </button>
+            )
+          })}
+        </div>
+
+        <div className="pawlink-match-question" key={activeSection}>
+          <div className="pawlink-match-question-copy">
+            <p>Step {currentStepIndex + 1} of {matchProfileSteps.length}</p>
+            <h4>{currentStep.title}</h4>
+            <span>{currentStep.description}</span>
           </div>
 
-          <div className="pawlink-match-question" key={activeSection}>
-            <div className="pawlink-match-question-copy">
-              <p>Step {currentStepIndex + 1} of {matchProfileSteps.length}</p>
-              <h4>{currentStep.title}</h4>
-              <span>{currentStep.description}</span>
-            </div>
+          <MatchProfileStepContent
+            step={activeSection}
+            profile={profile}
+            onProfileChange={onProfileChange}
+          />
+        </div>
 
-            <MatchProfileStepContent
-              step={activeSection}
-              profile={profile}
-              filters={filters}
-              onProfileChange={onProfileChange}
-              onFiltersChange={onFiltersChange}
-            />
-          </div>
-
-          <div className="pawlink-match-live-summary">
-            <div>
-              <p className="text-xs font-black text-violet-700">Live summary</p>
-              <h4>{matchProfileInsight(profile, filters)}</h4>
-              <span>Your pet cards update instantly as Pawlink learns from each answer.</span>
-            </div>
-          </div>
-
-          <div className="pawlink-match-actions">
-            <Button type="button" variant="secondary" onClick={goToPreviousStep} disabled={currentStepIndex === 0}>
-              Back
-            </Button>
-            {currentStepIndex === matchProfileSteps.length - 1 ? (
-              <Button type="button" onClick={onToggle}>See matches</Button>
-            ) : (
-              <Button type="button" onClick={goToNextStep}>Next question</Button>
-            )}
+        <div className="pawlink-match-live-summary">
+          <div>
+            <p className="text-xs font-black text-violet-700">Live summary</p>
+            <h4>{matchProfileInsight(profile)}</h4>
+            <span>Your ranked pet list appears as soon as Pawlink finishes matching.</span>
           </div>
         </div>
-      ) : null}
+
+        <div className="pawlink-match-actions">
+          <Button type="button" variant="secondary" onClick={goToPreviousStep} disabled={currentStepIndex === 0 || isMatching}>
+            Back
+          </Button>
+          {currentStepIndex === matchProfileSteps.length - 1 ? (
+            <Button type="button" onClick={onUpdateMatches} disabled={isMatching}>
+              {isMatching ? 'Finding...' : 'Find my best matches'}
+            </Button>
+          ) : (
+            <Button type="button" onClick={goToNextStep} disabled={isMatching}>
+              Next question
+            </Button>
+          )}
+        </div>
+      </div>
     </Card>
   )
 }
@@ -746,33 +846,27 @@ const matchProfileSteps: Array<{
   { id: 'home', shortLabel: 'Home', title: 'Where do you live?', description: 'This helps Pawlink understand space, noise, and daily comfort.' },
   { id: 'time', shortLabel: 'Time', title: 'How much time do you spend at home?', description: 'We will tune matches toward pets that fit your daily rhythm.' },
   { id: 'experience', shortLabel: 'Care', title: 'What is your pet experience?', description: 'Some pets are easier first companions, others need confident handling.' },
-  { id: 'activity', shortLabel: 'Energy', title: 'What is your activity level?', description: 'A great match should enjoy the pace you naturally live.' },
   { id: 'children', shortLabel: 'Kids', title: 'Are there children at home?', description: 'Pawlink can prioritize pets known to be comfortable with children.' },
   { id: 'pets', shortLabel: 'Pets', title: 'Do you have other pets?', description: 'This helps avoid stressful introductions and supports smoother transitions.' },
-  { id: 'preferences', shortLabel: 'Prefs', title: 'What kind of pet are you imagining?', description: 'Optional preferences narrow discovery without changing the matching logic.' },
 ]
 
 function MatchProfileStepContent({
   step,
   profile,
-  filters,
   onProfileChange,
-  onFiltersChange,
 }: {
   step: ProfileSection
   profile: FamilyProfile
-  filters: Filters
   onProfileChange: <Key extends keyof FamilyProfile>(key: Key, value: FamilyProfile[Key]) => void
-  onFiltersChange: (filters: Filters) => void
 }) {
   if (step === 'home') {
     return (
       <OnboardingOptions
         value={profile.living_space}
         options={[
-          { value: 'apartment', icon: 'APT', title: 'Apartment', description: 'Cozy space, close neighbors, calmer routines.' },
-          { value: 'house_no_yard', icon: 'HOME', title: 'House', description: 'More room inside, flexible daily movement.' },
-          { value: 'house_yard', icon: 'YARD', title: 'House with yard', description: 'Outdoor space for play and enrichment.' },
+          { value: 'apartment', icon: '🏢', title: 'Apartment', description: 'Cozy space, close neighbors, calmer routines.' },
+          { value: 'house_no_yard', icon: '🏠', title: 'House', description: 'More room inside, flexible daily movement.' },
+          { value: 'house_yard', icon: '🌳', title: 'House with yard', description: 'Outdoor space for play and enrichment.' },
         ]}
         onSelect={(value) => onProfileChange('living_space', value as LivingSpace)}
       />
@@ -784,9 +878,9 @@ function MatchProfileStepContent({
       <OnboardingOptions
         value={profile.lifestyle}
         options={[
-          { value: 'sedentary', icon: 'HOME', title: 'I am home often', description: 'A calm companion can settle into your rhythm.' },
-          { value: 'moderate', icon: 'MID', title: 'A balanced routine', description: 'Some home time, some outings, steady care.' },
-          { value: 'active', icon: 'MOVE', title: 'I am out and moving', description: 'Best for pets that enjoy active days.' },
+          { value: 'sedentary', icon: '🛋️', title: 'I am home often', description: 'A calm companion can settle into your rhythm.' },
+          { value: 'moderate', icon: '🚶', title: 'A balanced routine', description: 'Some home time, some outings, steady care.' },
+          { value: 'active', icon: '🏃', title: 'I am out and moving', description: 'Best for pets that enjoy active days.' },
         ]}
         onSelect={(value) => onProfileChange('lifestyle', value as Lifestyle)}
       />
@@ -798,25 +892,11 @@ function MatchProfileStepContent({
       <OnboardingOptions
         value={profile.experience}
         options={[
-          { value: 'none', icon: 'NEW', title: 'Never had a pet', description: 'Show me beginner-friendly companions.' },
-          { value: 'some', icon: 'CARE', title: 'I have had some', description: 'I know the basics and can keep learning.' },
-          { value: 'experienced', icon: 'PRO', title: 'Lots of experience', description: 'I can support pets with more needs.' },
+          { value: 'none', icon: '🌱', title: 'Never had a pet', description: 'Show me beginner-friendly companions.' },
+          { value: 'some', icon: '🐾', title: 'I have had some', description: 'I know the basics and can keep learning.' },
+          { value: 'experienced', icon: '⭐', title: 'Lots of experience', description: 'I can support pets with more needs.' },
         ]}
         onSelect={(value) => onProfileChange('experience', value as Experience)}
-      />
-    )
-  }
-
-  if (step === 'activity') {
-    return (
-      <OnboardingOptions
-        value={profile.lifestyle}
-        options={[
-          { value: 'sedentary', icon: 'LOW', title: 'Low activity', description: 'Short walks, quiet nights, gentle play.' },
-          { value: 'moderate', icon: 'MOD', title: 'Moderate activity', description: 'Daily walks and regular weekend time.' },
-          { value: 'active', icon: 'HI', title: 'Very active', description: 'Runs, hikes, training, or long walks.' },
-        ]}
-        onSelect={(value) => onProfileChange('lifestyle', value as Lifestyle)}
       />
     )
   }
@@ -826,8 +906,8 @@ function MatchProfileStepContent({
       <OnboardingOptions
         value={profile.has_children ? 'yes' : 'no'}
         options={[
-          { value: 'yes', icon: 'KID', title: 'Yes, children at home', description: 'Prioritize pets known to be kid-friendly.' },
-          { value: 'no', icon: 'ADLT', title: 'No children at home', description: 'Keep matches open to adult households.' },
+          { value: 'yes', icon: '👧', title: 'Yes, children at home', description: 'Prioritize pets known to be kid-friendly.' },
+          { value: 'no', icon: '🙋', title: 'No children at home', description: 'Keep matches open to adult households.' },
         ]}
         columns="sm:grid-cols-2"
         onSelect={(value) => onProfileChange('has_children', value === 'yes')}
@@ -840,8 +920,8 @@ function MatchProfileStepContent({
       <OnboardingOptions
         value={profile.has_other_pets ? 'yes' : 'no'}
         options={[
-          { value: 'yes', icon: 'PET', title: 'Yes, other pets', description: 'Prioritize animals comfortable with pets.' },
-          { value: 'no', icon: 'SOLO', title: 'No other pets', description: 'Solo companions are welcome too.' },
+          { value: 'yes', icon: '🐶', title: 'Yes, other pets', description: 'Prioritize animals comfortable with pets.' },
+          { value: 'no', icon: '🧡', title: 'No other pets', description: 'Solo companions are welcome too.' },
         ]}
         columns="sm:grid-cols-2"
         onSelect={(value) => onProfileChange('has_other_pets', value === 'yes')}
@@ -849,41 +929,7 @@ function MatchProfileStepContent({
     )
   }
 
-  return (
-    <div className="grid gap-4">
-      <OnboardingOptions
-        value={filters.species}
-        options={[
-          { value: 'all', icon: 'ALL', title: 'Any pet', description: 'Keep both cats and dogs visible.' },
-          { value: 'dog', icon: 'DOG', title: 'Dogs', description: 'Show me dogs first.' },
-          { value: 'cat', icon: 'CAT', title: 'Cats', description: 'Show me cats first.' },
-        ]}
-        onSelect={(value) => onFiltersChange({ ...filters, species: value as SpeciesFilter })}
-      />
-      <OnboardingOptions
-        value={filters.size}
-        options={[
-          { value: 'all', icon: 'ALL', title: 'Any size', description: 'I am flexible on size.' },
-          { value: 'small', icon: 'S', title: 'Small', description: 'Compact companions.' },
-          { value: 'medium', icon: 'M', title: 'Medium', description: 'Balanced size.' },
-          { value: 'large', icon: 'L', title: 'Large', description: 'Bigger companions.' },
-        ]}
-        columns="sm:grid-cols-4"
-        onSelect={(value) => onFiltersChange({ ...filters, size: value as SizeFilter })}
-      />
-      <OnboardingOptions
-        value={filters.energy_level}
-        options={[
-          { value: 'all', icon: 'ALL', title: 'Any energy', description: 'Keep options open.' },
-          { value: 'low', icon: 'LOW', title: 'Calm', description: 'Quiet and gentle.' },
-          { value: 'medium', icon: 'MID', title: 'Balanced', description: 'Some play, some rest.' },
-          { value: 'high', icon: 'HIGH', title: 'Active', description: 'Ready to move.' },
-        ]}
-        columns="sm:grid-cols-4"
-        onSelect={(value) => onFiltersChange({ ...filters, energy_level: value as EnergyFilter })}
-      />
-    </div>
-  )
+  return null
 }
 
 function OnboardingOptions<OptionValue extends string>({
@@ -922,30 +968,14 @@ function OnboardingOptions<OptionValue extends string>({
   )
 }
 
-function matchProfileInsight(profile: FamilyProfile, filters: Filters) {
-  const energy = filters.energy_level === 'all'
-    ? profile.lifestyle === 'sedentary'
-      ? 'calm'
-      : profile.lifestyle === 'active'
-        ? 'active'
-        : 'balanced'
-    : filters.energy_level === 'low'
-      ? 'calm'
-      : filters.energy_level === 'high'
-        ? 'active'
-        : 'balanced'
+function matchProfileInsight(profile: FamilyProfile) {
+  const energy = profile.lifestyle === 'sedentary'
+    ? 'calm'
+    : profile.lifestyle === 'active'
+      ? 'active'
+      : 'balanced'
 
-  const size = filters.size === 'all'
-    ? profile.living_space === 'apartment'
-      ? 'small or medium-sized'
-      : 'well-matched'
-    : `${filters.size}-sized`
-
-  const species = filters.species === 'dog'
-    ? 'dogs'
-    : filters.species === 'cat'
-      ? 'cats'
-      : 'pets'
+  const size = profile.living_space === 'apartment' ? 'small or medium-sized' : 'well-matched'
 
   const home = profile.living_space === 'apartment'
     ? 'living in apartments'
@@ -953,42 +983,68 @@ function matchProfileInsight(profile: FamilyProfile, filters: Filters) {
       ? 'with room to enjoy a yard'
       : 'living in homes'
 
-  return `You seem to be a great match for ${energy} ${size} ${species} ${home}.`
+  return `You seem to be a great match for ${energy} ${size} pets ${home}.`
 }
 
 function PetResultsToolbar({
   count,
+  shownCount,
   currentPage,
   totalPages,
   sortBy,
+  isMatching,
+  isUsingSmartMatches,
+  filters,
+  activeFilterCount,
   onSortChange,
+  onApplyFilter,
+  onClearFilters,
 }: {
   count: number
+  shownCount: number
   currentPage: number
   totalPages: number
   sortBy: SortOption
+  isMatching: boolean
+  isUsingSmartMatches: boolean
+  filters: Filters
+  activeFilterCount: number
   onSortChange: (sort: SortOption) => void
+  onApplyFilter: (update: (current: Filters) => Filters) => void
+  onClearFilters: () => void
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h3 className="text-base font-black text-slate-950">{count} pets matched to your profile</h3>
-        <p className="mt-1 text-sm text-slate-500">
-          Showing page {currentPage} of {totalPages}. Sorted by compatibility unless you choose another view.
-        </p>
+    <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-base font-black text-slate-950">{count} pets matched to your profile</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Showing {shownCount} pets on page {currentPage} of {totalPages}. {isMatching
+              ? 'Updating matches...'
+              : isUsingSmartMatches
+                ? 'Ranked with smart compatibility scores.'
+                : 'Using local matching while smart matching is unavailable.'}
+          </p>
+        </div>
+        <label className="flex items-center gap-2 text-sm font-bold text-slate-600">
+          <span>Sort</span>
+          <select
+            value={sortBy}
+            onChange={(event) => onSortChange(event.target.value as SortOption)}
+            className="public-select"
+          >
+            <option value="best_match">Best match</option>
+            <option value="newest">Newest</option>
+            <option value="age">Age</option>
+          </select>
+        </label>
       </div>
-      <label className="flex items-center gap-2 text-sm font-bold text-slate-600">
-        <span>Sort</span>
-        <select
-          value={sortBy}
-          onChange={(event) => onSortChange(event.target.value as SortOption)}
-          className="public-select"
-        >
-          <option value="best_match">Best match</option>
-          <option value="newest">Newest</option>
-          <option value="age">Age</option>
-        </select>
-      </label>
+      <PetFilterChips
+        filters={filters}
+        activeCount={activeFilterCount}
+        onApply={onApplyFilter}
+        onClear={onClearFilters}
+      />
     </div>
   )
 }

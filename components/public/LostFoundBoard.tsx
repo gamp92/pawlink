@@ -191,7 +191,6 @@ export function LostFoundBoard() {
   const [selectedId, setSelectedId] = useState(lostFoundReports[0]?.id ?? '')
   const [isReportFlowOpen, setIsReportFlowOpen] = useState(false)
   const [isAlertFlowOpen, setIsAlertFlowOpen] = useState(false)
-  const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false)
   const [notifiedReportId, setNotifiedReportId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -262,12 +261,22 @@ export function LostFoundBoard() {
   const matchedReport = selectedReport?.matched_report_id
     ? reports.find((report) => report.id === selectedReport.matched_report_id) ?? null
     : null
-  const shouldShowVisionPanel = selectedReport?.report_type === 'found' && matchedReport && selectedReport.match_confidence
 
   function selectReport(report: LostFoundReport) {
     setSelectedId(report.id)
     setNotifiedReportId(null)
-    setIsMobileDetailOpen(true)
+  }
+
+  function handleReportSubmitted(report: LostFoundReport) {
+    setReports((currentReports) => [
+      report,
+      ...currentReports.filter((item) => item.id !== report.id),
+    ])
+    setSelectedId(report.id)
+    setFilter('all')
+    setQuery('')
+    setSortBy('newest')
+    setNotifiedReportId(null)
   }
 
   useEffect(() => {
@@ -444,24 +453,11 @@ export function LostFoundBoard() {
         </aside>
       </div>
 
-      {selectedReport && isMobileDetailOpen ? (
-        <div className="fixed inset-0 z-50 bg-slate-950/40 lg:hidden" role="dialog" aria-modal="true" aria-label={`${selectedReport.pet_name} report detail`}>
-          <button type="button" className="absolute inset-0 h-full w-full cursor-default" onClick={() => setIsMobileDetailOpen(false)} aria-label="Close report detail" />
-          <div className="absolute bottom-0 left-0 right-0 max-h-[82vh] overflow-y-auto rounded-t-3xl bg-white p-4 shadow-xl">
-            <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-200" />
-          <ReportDetail
-            report={selectedReport}
-            matchedReport={matchedReport}
-            shouldShowVisionPanel={Boolean(shouldShowVisionPanel)}
-            notifiedReportId={notifiedReportId}
-            onNotify={() => setNotifiedReportId(selectedReport.id)}
-            compact
-          />
-          </div>
-        </div>
-      ) : null}
-
-      <ReportPetFlow open={isReportFlowOpen} onClose={() => setIsReportFlowOpen(false)} />
+      <ReportPetFlow
+        open={isReportFlowOpen}
+        onClose={() => setIsReportFlowOpen(false)}
+        onSubmitted={handleReportSubmitted}
+      />
       <AlertSubscriptionFlow open={isAlertFlowOpen} onClose={() => setIsAlertFlowOpen(false)} />
     </div>
   )
@@ -541,7 +537,6 @@ function ReportCard({
           </div>
 
           <p className="pawlink-report-description">{report.description}</p>
-          <span className="pawlink-report-cta">View details</span>
 
           <div className="pawlink-selected-details text-left">
             {showVision ? (
@@ -571,79 +566,5 @@ function ReportCard({
           </div>
         </div>
     </article>
-  )
-}
-
-function ReportDetail({
-  report,
-  matchedReport,
-  shouldShowVisionPanel,
-  notifiedReportId,
-  onNotify,
-  compact = false,
-}: {
-  report?: LostFoundReport
-  matchedReport: LostFoundReport | null
-  shouldShowVisionPanel: boolean
-  notifiedReportId: string | null
-  onNotify: () => void
-  compact?: boolean
-}) {
-  if (!report) {
-    return <EmptyState title="Select a report" description="Choose a map marker or report card to see details." />
-  }
-
-  const imageUrl = getPetDisplayImage(report)
-  const petName = report.pet_name || 'Unknown pet'
-
-  return (
-    <Card className={compact ? 'p-0 overflow-hidden' : 'sticky top-4 overflow-hidden rounded-[1.5rem] border-violet-100 shadow-lg'}>
-      <div className="pawlink-photo-frame" style={{ aspectRatio: compact ? '16 / 9' : '21 / 9' }}>
-        <img src={imageUrl} alt={`${petName}, ${report.species} ${report.report_type} report`} className="pawlink-pet-photo" />
-        <div className="absolute left-4 top-4">
-          <StatusBadge label={report.report_type} tone={reportTypeTone(report.report_type)} />
-        </div>
-      </div>
-      <div className={compact ? 'p-4' : 'p-5'}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-bold text-violet-600">Report detail</p>
-          <h3 className="mt-1 text-2xl font-black tracking-tight text-slate-950">{petName}</h3>
-          <p className="mt-1 text-xs text-slate-500">{report.location_notes}</p>
-        </div>
-      </div>
-
-      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <p className="font-bold text-slate-950">{speciesIcon[report.species]}</p>
-          <p className="mt-1 text-slate-500">{report.breed}</p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <p className="font-bold text-slate-950">{formatDate(report.created_at)}</p>
-          <p className="mt-1 text-slate-500">1.2 km away</p>
-        </div>
-      </div>
-
-      <p className="mt-3 text-sm leading-6 text-slate-600">{report.description}</p>
-
-      {shouldShowVisionPanel && matchedReport ? (
-        <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 p-3">
-          <p className="text-sm font-black text-violet-900">Vision match found</p>
-          <p className="mt-1 text-xs leading-5 text-slate-600">
-            Possible match with {matchedReport.pet_name} at {report.match_confidence}% confidence.
-          </p>
-          {notifiedReportId === report.id ? (
-            <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-700">
-              Owner notified in mock workflow.
-            </div>
-          ) : (
-            <Button onClick={onNotify} className="mt-3" fullWidth>
-              Notify owner
-            </Button>
-          )}
-        </div>
-      ) : null}
-      </div>
-    </Card>
   )
 }

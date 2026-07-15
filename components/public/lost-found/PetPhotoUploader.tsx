@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/shared/Button'
 import type { SelectedPetPhoto } from '@/components/public/lost-found/types'
 
+// TODO: Re-enable this uploader in the active Report Pet flow after the backend
+// provides an anonymous Supabase Storage upload contract that returns permanent
+// photo URLs accepted by POST /api/lost-found.
+
 const maxFileSizeBytes = 5 * 1024 * 1024
 
 export function PetPhotoUploader({

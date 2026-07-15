@@ -32,13 +32,14 @@ export type AdoptionRequest = {
   notes?: string
   compatibility_score: number
   compatibility_reasons: string[]
-  animal: Pick<Animal, 'id' | 'name' | 'photo_urls'>
+  animal: Pick<Animal, 'id' | 'name' | 'photo_urls'> | null
   family: {
-    full_name: string
-    email: string
-    living_space: 'apartment' | 'house_no_yard' | 'house_yard'
-    has_children: boolean
-    has_other_pets: boolean
+    full_name: string | null
+    email: string | null
+    phone?: string | null
+    living_space: 'apartment' | 'house_no_yard' | 'house_yard' | null
+    has_children: boolean | null
+    has_other_pets: boolean | null
   }
   created_at: string
 }
@@ -220,6 +221,7 @@ export const adoptionRequests: AdoptionRequest[] = [
     family: {
       full_name: 'Ana Garcia',
       email: 'ana@example.com',
+      phone: '+52 55 1000 2000',
       living_space: 'apartment',
       has_children: true,
       has_other_pets: false,
@@ -239,6 +241,7 @@ export const adoptionRequests: AdoptionRequest[] = [
     family: {
       full_name: 'Luis Fernandez',
       email: 'luis@example.com',
+      phone: null,
       living_space: 'apartment',
       has_children: false,
       has_other_pets: false,
@@ -259,6 +262,7 @@ export const adoptionRequests: AdoptionRequest[] = [
     family: {
       full_name: 'Maria Torres',
       email: 'maria@example.com',
+      phone: '+52 55 3000 4000',
       living_space: 'house_yard',
       has_children: false,
       has_other_pets: true,

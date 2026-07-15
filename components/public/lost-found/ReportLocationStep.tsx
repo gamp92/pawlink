@@ -23,6 +23,15 @@ export function ReportLocationStep({ form, errors, updateField }: Props) {
           placeholder="Near Parque Mexico, main entrance, corner store..."
         />
       </Field>
+      <Field id="report-city" label="City optional" error={errors.city}>
+        <input
+          id="report-city"
+          value={form.city}
+          onChange={(event) => updateField('city', event.target.value)}
+          className={inputClassName}
+          placeholder="Ciudad de Mexico, Quito, Medellin..."
+        />
+      </Field>
       <MapLocationPicker
         value={form.location}
         onChange={(location) => updateField('location', location)}

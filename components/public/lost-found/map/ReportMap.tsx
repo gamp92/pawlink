@@ -342,6 +342,15 @@ function ClusterMarker({
   onSelectReport: (report: LostFoundReport) => void
 }) {
   const map = useMap()
+  const popupRef = useRef<L.Popup | null>(null)
+
+  function focusReport(report: LostFoundReport) {
+    onSelectReport(report)
+    map.flyTo([report.location.lat, report.location.lng], Math.max(map.getZoom(), 17), {
+      duration: 0.7,
+    })
+    popupRef.current?.close()
+  }
 
   return (
     <Marker
@@ -355,16 +364,41 @@ function ClusterMarker({
             onSelectReport(cluster.reports[0])
             return
           }
-
-          const bounds = L.latLngBounds(cluster.reports.map((report) => [report.location.lat, report.location.lng] as [number, number]))
-          map.flyToBounds(bounds, { padding: [56, 56], maxZoom: 17, duration: 0.7 })
         },
       }}
     >
-      <Popup>
+      <Popup ref={popupRef} maxWidth={340} className="pawlink-map-cluster-popup-shell">
         <div className="pawlink-map-cluster-popup">
           <strong>{cluster.reports.length} nearby reports</strong>
-          <p>Zoom in to see each pet report.</p>
+          <p>Choose a pet report to focus it on the map.</p>
+          <div className="pawlink-map-cluster-list">
+            {cluster.reports.slice(0, 6).map((report, index) => {
+              const imageUrl = getPetDisplayImage(report)
+              return (
+                <button
+                  key={report.id}
+                  type="button"
+                  className="pawlink-map-cluster-item"
+                  onClick={() => focusReport(report)}
+                >
+                  <img src={imageUrl} alt={`${report.pet_name} report`} />
+                  <span className="pawlink-map-cluster-item-copy">
+                    <span className="pawlink-map-cluster-item-title">
+                      <span>{report.pet_name || 'Unknown pet'}</span>
+                      <StatusBadge label={report.report_type} tone={reportTypeTone(report.report_type)} />
+                    </span>
+                    <span className="pawlink-map-cluster-item-meta">
+                      {formatDate(report.created_at)} · {distanceFor(index)}
+                    </span>
+                    <span className="pawlink-map-cluster-item-location">{report.location_notes}</span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          {cluster.reports.length > 6 ? (
+            <p className="pawlink-map-cluster-more">Showing 6 of {cluster.reports.length} reports. Zoom in to separate the rest.</p>
+          ) : null}
         </div>
       </Popup>
     </Marker>

@@ -25,8 +25,19 @@ export type ApiAdoptionRequest = {
   compatibility_score: number | string | null
   compatibility_reasons: string[] | null
   notes?: string | null
-  animal: AdoptionRequest['animal'] | null
-  family: AdoptionRequest['family'] | null
+  animal: {
+    id: string
+    name: string
+    photo_urls: string[] | null
+  } | null
+  family: {
+    full_name: string | null
+    email: string | null
+    phone: string | null
+    living_space: AdoptionRequest['family']['living_space']
+    has_children: boolean | null
+    has_other_pets: boolean | null
+  } | null
   created_at: string
 }
 
@@ -113,13 +124,20 @@ export function toAdoptionRequest(apiRequest: ApiAdoptionRequest): AdoptionReque
     notes: apiRequest.notes ?? undefined,
     compatibility_score: Number(apiRequest.compatibility_score ?? 0),
     compatibility_reasons: apiRequest.compatibility_reasons ?? [],
-    animal: apiRequest.animal ?? { id: 'unknown-animal', name: 'Unknown pet', photo_urls: [] },
-    family: apiRequest.family ?? {
-      full_name: 'Unknown applicant',
-      email: 'unknown@example.com',
-      living_space: 'apartment',
-      has_children: false,
-      has_other_pets: false,
+    animal: apiRequest.animal
+      ? {
+          id: apiRequest.animal.id,
+          name: apiRequest.animal.name,
+          photo_urls: apiRequest.animal.photo_urls ?? [],
+        }
+      : null,
+    family: {
+      full_name: apiRequest.family?.full_name ?? null,
+      email: apiRequest.family?.email ?? null,
+      phone: apiRequest.family?.phone ?? null,
+      living_space: apiRequest.family?.living_space ?? null,
+      has_children: apiRequest.family?.has_children ?? null,
+      has_other_pets: apiRequest.family?.has_other_pets ?? null,
     },
     created_at: apiRequest.created_at,
   }

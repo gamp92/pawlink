@@ -1,9 +1,7 @@
 import type { ReportType, Species } from '@/lib/mock-data'
 
-export type LostFoundFlowStep = 'reporter' | 'pet' | 'location' | 'photos' | 'review'
+export type LostFoundFlowStep = 'pet' | 'location' | 'review'
 export type AlertFlowStep = 'contact' | 'location' | 'review'
-export type PetSize = 'small' | 'medium' | 'large'
-export type PetSex = 'female' | 'male' | 'unknown'
 
 export type SelectedLocation = {
   lat: number
@@ -20,60 +18,40 @@ export type SelectedPetPhoto = {
 }
 
 export type LostFoundReportForm = {
-  first_name: string
-  last_name: string
-  email: string
-  phone: string
-  contact_consent: boolean
   report_type: ReportType
   pet_name: string
   species: Species | ''
   breed: string
   color: string
-  size: PetSize | ''
-  sex: PetSex | ''
   description: string
-  date_lost_or_seen: string
   location_notes: string
+  city: string
   location: SelectedLocation | null
+  // TODO: Re-enable photo selection only after the backend accepts permanent
+  // Supabase Storage URLs during anonymous report submission.
   photos: SelectedPetPhoto[]
 }
 
 export type AnonymousLostFoundReportPayload = {
-  reporter: {
-    first_name: string
-    last_name: string
-    email: string
-    phone?: string
-    contact_consent: boolean
+  report_type: ReportType
+  pet_name?: string
+  species: Species
+  breed?: string
+  color: string
+  description: string
+  location_notes: string
+  city?: string
+  location: {
+    lat: number
+    lng: number
   }
-  incident: {
-    report_type: ReportType
-    pet_name?: string
-    species: Species
-    breed?: string
-    color: string
-    size: PetSize
-    sex?: PetSex
-    description: string
-    date_lost_or_seen: string
-    location_notes: string
-    location: {
-      lat: number
-      lng: number
-    }
-  }
-  photos: Array<{
-    file_name: string
-    file_type: string
-    file_size: number
-  }>
 }
 
 export type LostFoundReportSubmissionResult = {
   report_id: string
-  status: 'received_for_review'
+  status: 'open' | 'resolved' | string
   submitted_at: string
+  message?: string
 }
 
 export type LostFoundReportAdapterResult =
@@ -93,6 +71,7 @@ export type AnonymousAlertSubscriptionPayload = {
   first_name: string
   last_name?: string
   email: string
+  city?: string
   location: {
     lat: number
     lng: number
@@ -103,7 +82,7 @@ export type AnonymousAlertSubscriptionPayload = {
 
 export type AlertSubscriptionResult = {
   subscription_id: string
-  status: 'created_locally'
+  status: 'created'
   submitted_at: string
 }
 
@@ -120,21 +99,14 @@ export const defaultReportLocation: SelectedLocation = {
 }
 
 export const initialLostFoundReportForm: LostFoundReportForm = {
-  first_name: '',
-  last_name: '',
-  email: '',
-  phone: '',
-  contact_consent: false,
   report_type: 'lost',
   pet_name: '',
   species: '',
   breed: '',
   color: '',
-  size: '',
-  sex: '',
   description: '',
-  date_lost_or_seen: '',
   location_notes: '',
+  city: '',
   location: null,
   photos: [],
 }

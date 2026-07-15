@@ -14,13 +14,19 @@ export function LostFoundReportSuccess({
       <div className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-white text-2xl font-black text-emerald-700 shadow-sm">
         ✓
       </div>
-      <h3 className="mt-4 text-3xl font-black tracking-tight text-slate-950">Report prepared</h3>
+      <h3 className="mt-4 text-3xl font-black tracking-tight text-slate-950">Report submitted</h3>
       <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-700">
-        Thank you for helping the community. Your report details are ready for review and follow-up by email.
+        Thank you for helping the community. Your report is now visible on the Lost & Found map so neighbors can help.
       </p>
-      <p className="mt-3 text-xs font-semibold text-emerald-700">Reference: {result.report_id}</p>
+      <div className="mt-4 rounded-2xl border border-emerald-100 bg-white/80 p-3 text-left">
+        <p className="text-xs font-bold text-slate-400">Report reference</p>
+        <p className="mt-1 break-all text-sm font-black text-emerald-700">{result.report_id}</p>
+        <p className="mt-2 text-xs font-semibold text-slate-500">
+          Status: {result.status}
+        </p>
+      </div>
       <Button type="button" onClick={onClose} className="mt-5" fullWidth>
-        Done
+        Return to Lost & Found
       </Button>
     </Card>
   )

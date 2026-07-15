@@ -133,6 +133,7 @@ export function AlertSubscriptionFlow({
       first_name: form.first_name.trim(),
       last_name: form.last_name.trim() || undefined,
       email: form.email.trim(),
+      city: form.location.label,
       location: {
         lat: form.location.lat,
         lng: form.location.lng,
@@ -143,6 +144,8 @@ export function AlertSubscriptionFlow({
   }
 
   async function submitSubscription() {
+    if (isSubmitting) return
+
     const payload = buildPayload()
     if (!payload) return
 
@@ -170,6 +173,16 @@ export function AlertSubscriptionFlow({
     setSubmitError(null)
     setResult(null)
     setIsSubmitting(false)
+  }
+
+  function resetForAnotherAlert() {
+    setStep('contact')
+    setForm(initialAlertSubscriptionForm)
+    setErrors({})
+    setSubmitError(null)
+    setResult(null)
+    setIsSubmitting(false)
+    closeButtonRef.current?.focus()
   }
 
   return (
@@ -213,7 +226,12 @@ export function AlertSubscriptionFlow({
         <div className="pawlink-dialog-body p-4 md:p-6">
           {result ? (
             <div className="mx-auto max-w-2xl">
-              <AlertSubscriptionSuccess result={result} onClose={closeAndReset} />
+              <AlertSubscriptionSuccess
+                form={form}
+                result={result}
+                onClose={closeAndReset}
+                onCreateAnother={resetForAnotherAlert}
+              />
             </div>
           ) : (
             <div className="mx-auto max-w-2xl space-y-4 transition duration-300">

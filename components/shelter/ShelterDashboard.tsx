@@ -23,7 +23,7 @@ export function ShelterDashboard() {
     () => [
       ...requests.slice(0, 3).map((request) => ({
         id: `request-${request.id}`,
-        title: `${request.family.full_name} requested ${request.animal.name}`,
+        title: `${request.family.full_name ?? 'Applicant'} requested ${request.animal?.name ?? 'an animal'}`,
         description: `${Math.round(request.compatibility_score)}% match. Status: ${request.status}.`,
         time: request.created_at.slice(0, 10),
         tone: request.status === 'pending' ? 'amber' as const : 'purple' as const,

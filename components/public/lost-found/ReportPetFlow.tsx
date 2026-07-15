@@ -7,11 +7,12 @@ import { LostFoundReportReview } from '@/components/public/lost-found/LostFoundR
 import { LostFoundReportSuccess } from '@/components/public/lost-found/LostFoundReportSuccess'
 import { PetInformationStep } from '@/components/public/lost-found/PetInformationStep'
 import { ReportLocationStep } from '@/components/public/lost-found/ReportLocationStep'
-import { ReportPhotosStep } from '@/components/public/lost-found/ReportPhotosStep'
-import { ReporterInformationStep } from '@/components/public/lost-found/ReporterInformationStep'
-import { submitAnonymousLostFoundReport } from '@/components/public/lost-found/lost-found-report-adapter'
+import {
+  mapLostFoundReportToApi,
+  submitAnonymousLostFoundReport,
+  type LostFoundReportApiPayload,
+} from '@/components/public/lost-found/lost-found-report-adapter'
 import type {
-  AnonymousLostFoundReportPayload,
   LostFoundFlowStep,
   LostFoundReportForm,
   LostFoundReportSubmissionResult,
@@ -19,33 +20,30 @@ import type {
 import { initialLostFoundReportForm } from '@/components/public/lost-found/types'
 import { Button } from '@/components/shared/Button'
 import { ErrorState } from '@/components/shared/ErrorState'
+import type { LostFoundReport } from '@/lib/mock-data'
 
 const reportSteps: Array<{ id: LostFoundFlowStep; label: string; description: string; icon: string }> = [
-  { id: 'reporter', label: 'Contact', description: 'Your details', icon: 'ID' },
-  { id: 'pet', label: 'Pet', description: 'Pet profile', icon: 'PET' },
-  { id: 'location', label: 'Location', description: 'Map pin', icon: 'PIN' },
-  { id: 'photos', label: 'Photos', description: 'Images', icon: 'IMG' },
-  { id: 'review', label: 'Review', description: 'Submit', icon: 'OK' },
+  { id: 'pet', label: 'Pet', description: 'What happened', icon: 'Pet' },
+  { id: 'location', label: 'Location', description: 'Map pin', icon: 'Map' },
+  { id: 'review', label: 'Review', description: 'Confirm', icon: 'Done' },
 ]
 
 const stepTitles: Record<LostFoundFlowStep, string> = {
-  reporter: 'Reporter information',
   pet: 'Pet and incident details',
   location: 'Location',
-  photos: 'Pet images',
   review: 'Review report',
 }
-
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export function ReportPetFlow({
   open,
   onClose,
+  onSubmitted,
 }: {
   open: boolean
   onClose: () => void
+  onSubmitted?: (report: LostFoundReport) => void
 }) {
-  const [step, setStep] = useState<LostFoundFlowStep>('reporter')
+  const [step, setStep] = useState<LostFoundFlowStep>('pet')
   const [form, setForm] = useState<LostFoundReportForm>(initialLostFoundReportForm)
   const [errors, setErrors] = useState<Partial<Record<keyof LostFoundReportForm, string>>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -57,21 +55,21 @@ export function ReportPetFlow({
     if (!open) return
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !isSubmitting) {
         closeAndReset()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [open])
+  }, [isSubmitting, open])
 
   if (!open) return null
 
   const stepIndex = reportSteps.findIndex((item) => item.id === step)
   const isFirstStep = stepIndex === 0
   const isReviewStep = step === 'review'
-  const currentStepTitle = result ? 'Report prepared' : stepTitles[step]
+  const currentStepTitle = result ? 'Report submitted' : stepTitles[step]
 
   function updateField<FieldName extends keyof LostFoundReportForm>(
     field: FieldName,
@@ -85,20 +83,10 @@ export function ReportPetFlow({
   function validateStep(targetStep: LostFoundFlowStep) {
     const nextErrors: Partial<Record<keyof LostFoundReportForm, string>> = {}
 
-    if (targetStep === 'reporter') {
-      if (!form.first_name.trim()) nextErrors.first_name = 'First name is required.'
-      if (!form.last_name.trim()) nextErrors.last_name = 'Last name is required.'
-      if (!form.email.trim()) nextErrors.email = 'Email is required.'
-      else if (!emailPattern.test(form.email.trim())) nextErrors.email = 'Enter a valid email address.'
-      if (!form.contact_consent) nextErrors.contact_consent = 'Consent to email contact is required.'
-    }
-
     if (targetStep === 'pet') {
       if (!form.species) nextErrors.species = 'Choose a species.'
       if (!form.color.trim()) nextErrors.color = 'Color is required.'
-      if (!form.size) nextErrors.size = 'Choose a size.'
       if (!form.description.trim()) nextErrors.description = 'Description is required.'
-      if (!form.date_lost_or_seen) nextErrors.date_lost_or_seen = 'Date is required.'
     }
 
     if (targetStep === 'location') {
@@ -111,7 +99,7 @@ export function ReportPetFlow({
   }
 
   function validateAll() {
-    const stepsToValidate: LostFoundFlowStep[] = ['reporter', 'pet', 'location']
+    const stepsToValidate: LostFoundFlowStep[] = ['pet', 'location']
     for (const item of stepsToValidate) {
       if (!validateStep(item)) {
         setStep(item)
@@ -132,38 +120,33 @@ export function ReportPetFlow({
     if (previousStep) setStep(previousStep)
   }
 
-  function buildPayload(): AnonymousLostFoundReportPayload | null {
-    if (!validateAll() || !form.species || !form.size || !form.location) return null
+  function buildPayload(): LostFoundReportApiPayload | null {
+    if (!validateAll() || !form.species || !form.location) return null
+    return mapLostFoundReportToApi(form)
+  }
+
+  function buildVisibleReport(submissionResult: LostFoundReportSubmissionResult): LostFoundReport | null {
+    if (!form.species || !form.location) return null
 
     return {
-      reporter: {
-        first_name: form.first_name.trim(),
-        last_name: form.last_name.trim(),
-        email: form.email.trim(),
-        phone: form.phone.trim() || undefined,
-        contact_consent: form.contact_consent,
+      id: submissionResult.report_id,
+      report_type: form.report_type,
+      pet_name: form.pet_name.trim() || (form.report_type === 'found' ? 'Unknown pet' : 'Unnamed pet'),
+      species: form.species,
+      breed: form.breed.trim() || 'Mixed',
+      color: form.color.trim(),
+      description: form.description.trim(),
+      photo_urls: [],
+      location: {
+        lat: form.location.lat,
+        lng: form.location.lng,
       },
-      incident: {
-        report_type: form.report_type,
-        pet_name: form.pet_name.trim() || undefined,
-        species: form.species,
-        breed: form.breed.trim() || undefined,
-        color: form.color.trim(),
-        size: form.size,
-        sex: form.sex || undefined,
-        description: form.description.trim(),
-        date_lost_or_seen: form.date_lost_or_seen,
-        location_notes: form.location_notes.trim(),
-        location: {
-          lat: form.location.lat,
-          lng: form.location.lng,
-        },
-      },
-      photos: form.photos.map((photo) => ({
-        file_name: photo.file.name,
-        file_type: photo.file.type,
-        file_size: photo.file.size,
-      })),
+      location_notes: form.location_notes.trim(),
+      city: form.city.trim() || 'Community area',
+      status: submissionResult.status === 'resolved' ? 'resolved' : 'open',
+      matched_report_id: null,
+      match_confidence: null,
+      created_at: submissionResult.submitted_at,
     }
   }
 
@@ -177,6 +160,8 @@ export function ReportPetFlow({
       const submissionResult = await submitAnonymousLostFoundReport(payload)
       if (submissionResult.ok) {
         setResult(submissionResult.result)
+        const createdReport = buildVisibleReport(submissionResult.result)
+        if (createdReport) onSubmitted?.(createdReport)
       } else {
         setSubmitError(submissionResult.error)
       }
@@ -190,7 +175,7 @@ export function ReportPetFlow({
   function closeAndReset() {
     form.photos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl))
     onClose()
-    setStep('reporter')
+    setStep('pet')
     setForm(initialLostFoundReportForm)
     setErrors({})
     setSubmitError(null)
@@ -199,7 +184,7 @@ export function ReportPetFlow({
   }
 
   function handleBackdropClick(event: MouseEvent<HTMLDivElement>) {
-    if (event.target === event.currentTarget) {
+    if (event.target === event.currentTarget && !isSubmitting) {
       closeAndReset()
     }
   }
@@ -268,10 +253,8 @@ export function ReportPetFlow({
             </div>
           ) : (
             <div className="report-flow-content space-y-4">
-              {step === 'reporter' ? <ReporterInformationStep {...stepProps} /> : null}
               {step === 'pet' ? <PetInformationStep {...stepProps} /> : null}
               {step === 'location' ? <ReportLocationStep {...stepProps} /> : null}
-              {step === 'photos' ? <ReportPhotosStep form={form} updateField={updateField} /> : null}
               {step === 'review' ? <LostFoundReportReview form={form} onEdit={setStep} /> : null}
               {submitError ? <ErrorState title="Report not ready" description={submitError} /> : null}
             </div>
@@ -286,7 +269,7 @@ export function ReportPetFlow({
               </Button>
               {isReviewStep ? (
                 <Button type="button" onClick={submitReport} fullWidth disabled={isSubmitting}>
-                  {isSubmitting ? 'Preparing...' : 'Submit report'}
+                  {isSubmitting ? 'Submitting...' : 'Submit report'}
                 </Button>
               ) : (
                 <Button type="button" onClick={goNext} fullWidth disabled={isSubmitting}>
