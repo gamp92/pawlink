@@ -270,6 +270,48 @@ async function checkAlertSubscriptions() {
   }
 }
 
+// ── Anonymous photo upload: signed URL → PUT real PNG → public URL ─────────
+
+const TINY_PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+
+async function checkPhotoUploads() {
+  console.log('\nSubida anónima de fotos (signed URL):')
+  const created = await api('POST', '/api/uploads', { file_name: 'smoke.png', content_type: 'image/png' })
+  const shapeOk = created.status === 201 && Boolean(created.json?.upload_url) && Boolean(created.json?.public_url)
+  record(shapeOk, 'POST /api/uploads → 201 con upload_url y public_url')
+  if (!shapeOk) return
+
+  const { upload_url, public_url } = created.json
+  const storagePath = decodeURIComponent(new URL(public_url).pathname.split('/object/public/pets/')[1] ?? '')
+
+  try {
+    const uploaded = await fetch(upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'image/png' },
+      body: Buffer.from(TINY_PNG_BASE64, 'base64'),
+    })
+    record(uploaded.ok, 'PUT del archivo al upload_url → subida directa a Storage', `status ${uploaded.status}`)
+
+    const publicRes = await fetch(public_url)
+    const contentType = publicRes.headers.get('content-type') ?? ''
+    record(publicRes.ok && contentType.startsWith('image/'), 'GET public_url sirve la imagen', contentType)
+
+    const badType = await api('POST', '/api/uploads', { file_name: 'doc.pdf', content_type: 'application/pdf' })
+    record(badType.status === 400, 'POST content_type no permitido → 400')
+  } finally {
+    if (hasServiceAccess && storagePath) {
+      const del = await fetch(`${SUPA_URL}/storage/v1/object/pets/${storagePath}`, {
+        method: 'DELETE',
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+      })
+      record(del.ok, 'cleanup foto subida (via service role)')
+    } else {
+      skip('cleanup foto', 'sin service role — quedó una foto smoke en el bucket')
+    }
+  }
+}
+
 // ── Vision + matching ───────────────────────────────────────────────────────
 
 async function checkVision() {
@@ -320,6 +362,7 @@ async function main() {
   await checkAdoptionLifecycle(shelterId)
   await checkLostFoundLifecycle()
   await checkAlertSubscriptions()
+  await checkPhotoUploads()
   await checkVision()
   if (RUN_MATCHING) await checkMatching()
   else skip('POST /api/matching', 'usa --matching para incluirlo (consume tokens de Groq)')
