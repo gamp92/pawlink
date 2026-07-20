@@ -525,6 +525,40 @@ paths:
         '404': { description: Token desconocido, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '500': { $ref: '#/components/responses/ServerError' }
 
+  /api/uploads:
+    post:
+      tags: [Lost & Found (F3)]
+      summary: Genera una signed upload URL de un solo uso para subir una foto
+      description: >
+        Endpoint público (sin auth) para que un usuario anónimo suba una foto de reporte
+        directo a Supabase Storage (bucket público `pets`). Una request por foto.
+        El bucket valida tamaño máximo (5MB) y mime type al momento de subir.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content_type]
+              properties:
+                content_type: { type: string, enum: [image/jpeg, image/png, image/webp] }
+                file_name: { type: string, maxLength: 255, description: Metadata opcional — nunca se usa en el path de storage }
+      responses:
+        '201':
+          description: >
+            Signed upload URL creada (expira en 2h, un solo uso). El browser hace un PUT
+            del archivo a upload_url; luego usa public_url para el reporte.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  upload_url: { type: string, format: uri }
+                  public_url: { type: string, format: uri }
+                  expires_in: { type: integer, example: 7200 }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
   /api/vision:
     post:
       tags: [Lost & Found (F3)]
