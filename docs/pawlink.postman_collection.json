@@ -229,6 +229,18 @@
           }
         },
         {
+          "name": "POST /api/uploads",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/uploads", "host": ["{{base_url}}"], "path": ["api", "uploads"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"file_name\": \"foto.jpg\",\n  \"content_type\": \"image/jpeg\"\n}"
+            }
+          }
+        },
+        {
           "name": "POST /api/vision",
           "request": {
             "method": "POST",
