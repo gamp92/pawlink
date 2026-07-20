@@ -21,13 +21,22 @@ interface UploadRequestBody {
 // enforces max size (5MB) and image mime types at upload time.
 // Contract: docs/api-contracts/f3-lost-found.md
 export async function POST(request: Request) {
-  const body: Partial<UploadRequestBody> = await request.json()
+  const body: Partial<UploadRequestBody> = await request.json().catch(() => ({}))
+
+  const contentType = body.content_type
+  if (typeof contentType !== 'string' || !EXTENSION_BY_CONTENT_TYPE[contentType]) {
+    return NextResponse.json(
+      { error: 'content_type must be image/jpeg, image/png or image/webp' },
+      { status: 400 }
+    )
+  }
+
   const validationError = validateUploadRequest(body)
   if (validationError) {
     return NextResponse.json({ error: validationError }, { status: 400 })
   }
 
-  const extension = EXTENSION_BY_CONTENT_TYPE[body.content_type as string]
+  const extension = EXTENSION_BY_CONTENT_TYPE[contentType]
   // Random server-side path — the user's file_name never reaches storage
   const path = `lost-found/${crypto.randomUUID()}.${extension}`
   const storage = createServerClient().storage.from('pets')
@@ -49,9 +58,6 @@ export async function POST(request: Request) {
 }
 
 function validateUploadRequest(body: Partial<UploadRequestBody>): string | null {
-  if (typeof body?.content_type !== 'string' || !EXTENSION_BY_CONTENT_TYPE[body.content_type]) {
-    return 'content_type must be image/jpeg, image/png or image/webp'
-  }
   if (body.file_name != null && (typeof body.file_name !== 'string' || body.file_name.length > 255)) {
     return 'file_name must be a string of up to 255 chars'
   }
