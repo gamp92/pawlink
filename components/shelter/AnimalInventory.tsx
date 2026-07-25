@@ -21,10 +21,12 @@ import {
   statuses,
   type AnimalFormMode,
   type AnimalFormState,
+  type SelectedAnimalPhoto,
 } from '@/components/shelter/AnimalFormPanel'
 import { ShelterHubLayout } from '@/components/shelter/ShelterHubLayout'
 import { useShelterWorkspace } from '@/components/shelter/ShelterWorkspaceContext'
 import { useShelterAnimals } from '@/components/shelter/hooks/useShelterAnimals'
+import { uploadAnimalPhotos } from '@/components/shelter/animal-photo-adapter'
 import type { Animal, AnimalStatus } from '@/lib/mock-data'
 
 type StatusFilter = 'all' | AnimalStatus
@@ -60,6 +62,7 @@ export function AnimalInventory() {
   const [formState, setFormState] = useState<AnimalFormState>(emptyAnimalForm)
   const [formErrors, setFormErrors] = useState<Partial<Record<'name' | 'species', string>>>({})
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null)
+  const [photos, setPhotos] = useState<SelectedAnimalPhoto[]>([])
   const selectedAnimal = animals.find((animal) => animal.id === selectedId) ?? animals[0]
 
   useEffect(() => {
@@ -103,10 +106,16 @@ export function AnimalInventory() {
     )
   }
 
+  function resetPhotos() {
+    photos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl))
+    setPhotos([])
+  }
+
   function openCreateForm() {
     setFormState(emptyAnimalForm)
     setFormErrors({})
     setFeedback(null)
+    resetPhotos()
     setFormMode('create')
     setIsDetailOpen(true)
   }
@@ -116,6 +125,7 @@ export function AnimalInventory() {
     setFormState(getFormFromAnimal(animal))
     setFormErrors({})
     setFeedback(null)
+    resetPhotos()
     setFormMode('edit')
     setIsDetailOpen(true)
   }
@@ -147,6 +157,12 @@ export function AnimalInventory() {
     const normalizedAge = Number.isFinite(age) && age >= 0 ? age : 0
     const description = formState.description.trim() || 'No description provided yet.'
 
+    const photoUpload = await uploadAnimalPhotos(photos)
+    if (!photoUpload.ok) {
+      setFeedback({ tone: 'error', message: photoUpload.error })
+      return
+    }
+
     if (formMode === 'create') {
       const createdAnimal = await createAnimal({
         name: formState.name.trim(),
@@ -160,12 +176,13 @@ export function AnimalInventory() {
         energy_level: 'medium',
         good_with_kids: false,
         good_with_pets: false,
-        photo_urls: [],
+        photo_urls: photoUpload.urls,
       })
 
       if (createdAnimal) {
         setSelectedId(createdAnimal.id)
         setFormMode(null)
+        resetPhotos()
         setFeedback({ tone: 'success', message: `${createdAnimal.name} was added to the inventory.` })
         return
       }
@@ -183,10 +200,12 @@ export function AnimalInventory() {
       size: formState.size,
       status: formState.status,
       description,
+      photo_urls: [...selectedAnimal.photo_urls, ...photoUpload.urls],
     })
 
     if (didSave) {
       setFormMode(null)
+      resetPhotos()
       setFeedback({ tone: 'success', message: `${formState.name.trim()} was updated.` })
     } else {
       setFeedback({ tone: 'error', message: 'Animal update failed. Changes were rolled back.' })
@@ -299,15 +318,19 @@ export function AnimalInventory() {
 
           {formMode ? (
             <AnimalFormPanel
+              key={formMode === 'edit' ? selectedAnimal?.id : 'create'}
               formState={formState}
               formErrors={formErrors}
               formMode={formMode}
               isSaving={isSaving}
+              photos={photos}
+              onPhotosChange={setPhotos}
               onFieldChange={updateFormField}
               onSubmit={submitAnimalForm}
               onCancel={() => {
                 setFormMode(null)
                 setFormErrors({})
+                resetPhotos()
               }}
             />
           ) : selectedAnimal ? (

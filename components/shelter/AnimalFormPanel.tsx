@@ -3,8 +3,15 @@
 import type { Animal, AnimalStatus, Species } from '@/lib/mock-data'
 import { ActionBar } from '@/components/shared/ActionBar'
 import { Button } from '@/components/shared/Button'
+import { AnimalPhotoUploader } from '@/components/shelter/AnimalPhotoUploader'
 
 export type AnimalFormMode = 'create' | 'edit'
+
+export type SelectedAnimalPhoto = {
+  id: string
+  file: File
+  previewUrl: string
+}
 
 export type AnimalFormState = {
   name: string
@@ -47,6 +54,8 @@ export function AnimalFormPanel({
   formErrors,
   formMode,
   isSaving,
+  photos,
+  onPhotosChange,
   onFieldChange,
   onSubmit,
   onCancel,
@@ -55,6 +64,8 @@ export function AnimalFormPanel({
   formErrors: Partial<Record<'name' | 'species', string>>
   formMode: AnimalFormMode
   isSaving: boolean
+  photos: SelectedAnimalPhoto[]
+  onPhotosChange: (photos: SelectedAnimalPhoto[]) => void
   onFieldChange: <FieldName extends keyof AnimalFormState>(field: FieldName, value: AnimalFormState[FieldName]) => void
   onSubmit: () => void
   onCancel: () => void
@@ -174,6 +185,13 @@ export function AnimalFormPanel({
           placeholder="Temperament, medical notes, or adoption readiness..."
           disabled={isSaving}
         />
+      </div>
+
+      <div>
+        <label className="text-xs font-black uppercase tracking-wide text-slate-500">Photos</label>
+        <div className="mt-1">
+          <AnimalPhotoUploader photos={photos} onChange={onPhotosChange} />
+        </div>
       </div>
 
       <ActionBar className="rounded-2xl">
