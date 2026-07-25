@@ -213,9 +213,8 @@ Simplified view of `schema.sql` (see the file for full columns, constraints, and
 
 Notes on the current state:
 
-- `adoption_requests` now carries the adopter's contact inline (`full_name`, `email`, `phone`) — no account needed. A partial unique index (`animal_id` + `email` where `status = 'pending'`) backs the 409 dedupe.
-- `alert_subscriptions` is a standalone opt-in table (email + map point) with no FKs; only the service role touches it. It replaced `family_profiles` as the source of geo-alert recipients.
-- `family_profiles` is **legacy** — already backfilled into `alert_subscriptions` and scheduled for removal in phase 2.
+- `adoption_requests` carries the adopter's contact inline (`full_name`, `email`, `phone`) — no account needed. A partial unique index (`animal_id` + `email` where `status = 'pending'`) backs the 409 dedupe.
+- `alert_subscriptions` is a standalone opt-in table (email + map point) with no FKs; only the service role touches it. There is no `family_profiles` table or adopter/subscriber account — it was retired once `adoption_requests` and `alert_subscriptions` fully replaced it.
 - `lost_found_reports.matched_report_id` is a self-reference to the same table (set by the vision match, linking a *lost* report to its *found* counterpart) — drawn as a column note instead of a relationship line for readability.
 
 ```mermaid
