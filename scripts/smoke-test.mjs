@@ -315,13 +315,20 @@ async function checkPhotoUploads() {
   }
 
   const animalUpload = await api('POST', '/api/uploads', { content_type: 'image/png', context: 'animal' })
-  const animalShapeOk = animalUpload.status === 201 && Boolean(animalUpload.json?.public_url)
+  const animalShapeOk = animalUpload.status === 201 && Boolean(animalUpload.json?.upload_url) && Boolean(animalUpload.json?.public_url)
   record(animalShapeOk, "POST /api/uploads con context: 'animal' → 201")
   if (!animalShapeOk) return
 
-  const animalPublicUrl = animalUpload.json.public_url
+  const { upload_url: animalUploadUrl, public_url: animalPublicUrl } = animalUpload.json
   const animalPath = decodeURIComponent(new URL(animalPublicUrl).pathname.split('/object/public/pets/')[1] ?? '')
   record(animalPath.startsWith('animals/'), 'path va a la carpeta animals/, no lost-found/', animalPath)
+
+  const animalUploaded = await fetch(animalUploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'image/png' },
+    body: Buffer.from(TINY_PNG_BASE64, 'base64'),
+  })
+  record(animalUploaded.ok, 'PUT animal al upload_url → subida directa a Storage', `status ${animalUploaded.status}`)
 
   if (hasServiceAccess && animalPath) {
     const del = await fetch(`${SUPA_URL}/storage/v1/object/pets/${animalPath}`, {
