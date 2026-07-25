@@ -26,6 +26,7 @@ flowchart TB
         end
         subgraph api["/api/* — Vercel Functions (10s limit)"]
             apiCrud["animals · shelters ·<br/>adoption-requests · lost-found ·<br/>alert-subscriptions"]
+            apiUploads["uploads<br/>(signed URL mint)"]
             apiMatching["matching"]
             apiVision["vision"]
             apiRag["rag/query · rag/documents<br/>(proxy)"]
@@ -59,11 +60,13 @@ flowchart TB
     hub --> api
     findapet --> api
     lostfound --> api
+    lostfound --> apiUploads
     assistant --> apiRag
 
     hub -->|login| auth
     api --> db
     api --> storage
+    apiUploads -->|"mints signed<br/>upload URL"| storage
     apiMatching --> groq
     apiVision --> rekognition
     apiRag -->|X-Internal-Key| ragService
@@ -82,6 +85,7 @@ Key boundaries:
 - **Multi-tenant** — every shelter-owned table has `shelter_id`; RLS enforces it at the DB level and every query filters by it anyway (defense in depth).
 - **No always-on servers** — long work (>10s) goes to Supabase Edge Functions triggered by Database Webhooks, not to Vercel Functions.
 - **No account needed for the public** — adoption requests carry inline contact info (`full_name`, `email`, `phone`) and geo-alerts are an email opt-in (`alert_subscriptions`), so anonymous users never touch Supabase Auth.
+- **Anonymous photo uploads use signed URLs, never a proxy** — `POST /api/uploads` mints a single-use signed upload URL into the public `pets` bucket; the browser PUTs the file directly to Supabase, so file bytes never pass through a Vercel Function (sidesteps its 4.5MB body limit).
 
 ---
 
@@ -144,16 +148,19 @@ flowchart LR
     lfList["GET /api/lost-found"]
     lfCreate["POST /api/lost-found"]
     lfUpdate["PATCH /api/lost-found/[id]"]
+    uploads["POST /api/uploads"]
     vision["POST /api/vision"]
     subCreate["POST /api/alert-subscriptions"]
     subDelete["GET /api/alert-subscriptions<br/>/unsubscribe?token"]
 
     tReports[("lost_found_reports")]
     tSubs[("alert_subscriptions")]
+    petsBucket[("Storage: pets<br/>(public bucket)")]
     rekognition["AWS Rekognition"]
 
+    F3 --> uploads -->|"mints signed upload URL<br/>(browser PUTs photo directly)"| petsBucket
     F3 --> lfList -->|"reads (RPC get_reports_near_point<br/>when lat/lng given)"| tReports
-    F3 --> lfCreate -->|writes ⚡ geo-alert| tReports
+    F3 --> lfCreate -->|"writes ⚡ geo-alert<br/>(photo_urls from petsBucket)"| tReports
     F3 --> lfUpdate -->|writes status| tReports
     F3 --> vision -->|"reads photos, writes<br/>matched_report_id + confidence"| tReports
     vision -->|DetectLabels| rekognition
@@ -193,6 +200,7 @@ Full reference table:
 | F2 | `GET /api/shelters/[id]` | `shelters`, `animals` | — | — |
 | F2 | `POST /api/matching` | `animals` | — | Groq |
 | F2 | `POST /api/adoption-requests` | — | `adoption_requests` (inline contact, 409 dedupe) | — |
+| F3 | `POST /api/uploads` | — | Storage `pets` bucket (signed upload URL, no DB write) | — |
 | F3 | `GET /api/lost-found` | `lost_found_reports` (RPC `get_reports_near_point`) | — | — |
 | F3 | `POST /api/lost-found` | — | `lost_found_reports` ⚡ geo-alert | — |
 | F3 | `PATCH /api/lost-found/[id]` | — | `lost_found_reports` (status) | — |
