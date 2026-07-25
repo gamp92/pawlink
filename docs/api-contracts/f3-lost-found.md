@@ -161,6 +161,7 @@ anonymous Lost & Found reports and by the shelter dashboard's animal photos.
 **Error 400:**
 ```json
 { "error": "content_type must be image/jpeg, image/png or image/webp" }
+{ "error": "context must be lost-found or animal" }
 ```
 
 ---

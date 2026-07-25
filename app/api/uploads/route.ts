@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   const body: Partial<UploadRequestBody> = await request.json().catch(() => ({}))
 
   const contentType = body.content_type
-  if (typeof contentType !== 'string' || !EXTENSION_BY_CONTENT_TYPE[contentType]) {
+  if (typeof contentType !== 'string' || !Object.hasOwn(EXTENSION_BY_CONTENT_TYPE, contentType)) {
     return NextResponse.json(
       { error: 'content_type must be image/jpeg, image/png or image/webp' },
       { status: 400 }
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
   }
 
   const context = body.context ?? 'lost-found'
-  if (!(context in FOLDER_BY_CONTEXT)) {
+  if (typeof context !== 'string' || !Object.hasOwn(FOLDER_BY_CONTEXT, context)) {
     return NextResponse.json({ error: 'context must be lost-found or animal' }, { status: 400 })
   }
 

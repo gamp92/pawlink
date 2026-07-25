@@ -85,7 +85,7 @@ Key boundaries:
 - **Multi-tenant** — every shelter-owned table has `shelter_id`; RLS enforces it at the DB level and every query filters by it anyway (defense in depth).
 - **No always-on servers** — long work (>10s) goes to Supabase Edge Functions triggered by Database Webhooks, not to Vercel Functions.
 - **No account needed for the public** — adoption requests carry inline contact info (`full_name`, `email`, `phone`) and geo-alerts are an email opt-in (`alert_subscriptions`), so anonymous users never touch Supabase Auth.
-- **Anonymous photo uploads use signed URLs, never a proxy** — `POST /api/uploads` mints a single-use signed upload URL into the public `pets` bucket; the browser PUTs the file directly to Supabase, so file bytes never pass through a Vercel Function (sidesteps its 4.5MB body limit).
+- **Anonymous photo uploads use signed URLs, never a proxy** — `POST /api/uploads` mints a single-use signed upload URL into the public `pets` bucket; the browser PUTs the file directly to Supabase, so file bytes never pass through a Vercel Function (sidesteps its 4.5MB body limit). The same endpoint also mints animal-photo URLs for the F1 dashboard via `context: 'animal'`.
 
 ---
 
@@ -200,7 +200,7 @@ Full reference table:
 | F2 | `GET /api/shelters/[id]` | `shelters`, `animals` | — | — |
 | F2 | `POST /api/matching` | `animals` | — | Groq |
 | F2 | `POST /api/adoption-requests` | — | `adoption_requests` (inline contact, 409 dedupe) | — |
-| F3 | `POST /api/uploads` | — | Storage `pets` bucket (signed upload URL, no DB write) | — |
+| F3 | `POST /api/uploads` | — | Storage `pets` bucket, `lost-found/` or `animals/` by `context` (signed upload URL, no DB write) | — |
 | F3 | `GET /api/lost-found` | `lost_found_reports` (RPC `get_reports_near_point`) | — | — |
 | F3 | `POST /api/lost-found` | — | `lost_found_reports` ⚡ geo-alert | — |
 | F3 | `PATCH /api/lost-found/[id]` | — | `lost_found_reports` (status) | — |

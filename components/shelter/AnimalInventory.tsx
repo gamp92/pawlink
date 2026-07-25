@@ -63,6 +63,7 @@ export function AnimalInventory() {
   const [formErrors, setFormErrors] = useState<Partial<Record<'name' | 'species', string>>>({})
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null)
   const [photos, setPhotos] = useState<SelectedAnimalPhoto[]>([])
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false)
   const selectedAnimal = animals.find((animal) => animal.id === selectedId) ?? animals[0]
 
   useEffect(() => {
@@ -149,70 +150,77 @@ export function AnimalInventory() {
 
   async function submitAnimalForm() {
     if (!formMode || !validateForm()) return
+    if (isSubmittingForm) return
 
     const species = formState.species
     if (!species) return
 
-    const age = Number(formState.age_years)
-    const normalizedAge = Number.isFinite(age) && age >= 0 ? age : 0
-    const description = formState.description.trim() || 'No description provided yet.'
+    setIsSubmittingForm(true)
+    try {
+      const age = Number(formState.age_years)
+      const normalizedAge = Number.isFinite(age) && age >= 0 ? age : 0
+      const description = formState.description.trim() || 'No description provided yet.'
 
-    const photoUpload = await uploadAnimalPhotos(photos)
-    if (!photoUpload.ok) {
-      setFeedback({ tone: 'error', message: photoUpload.error })
-      return
-    }
-
-    if (formMode === 'create') {
-      const createdAnimal = await createAnimal({
-        name: formState.name.trim(),
-        species,
-        breed: 'Mixed',
-        age_years: normalizedAge,
-        size: formState.size,
-        gender: 'female',
-        color: 'unknown',
-        description,
-        energy_level: 'medium',
-        good_with_kids: false,
-        good_with_pets: false,
-        photo_urls: photoUpload.urls,
-      })
-
-      if (createdAnimal) {
-        setSelectedId(createdAnimal.id)
-        setFormMode(null)
-        resetPhotos()
-        setFeedback({ tone: 'success', message: `${createdAnimal.name} was added to the inventory.` })
+      const photoUpload = await uploadAnimalPhotos(photos)
+      if (!photoUpload.ok) {
+        setFeedback({ tone: 'error', message: photoUpload.error })
         return
       }
 
-      setFeedback({ tone: 'error', message: 'Animal creation failed. The optimistic item was removed.' })
-      return
-    }
+      if (formMode === 'create') {
+        const createdAnimal = await createAnimal({
+          name: formState.name.trim(),
+          species,
+          breed: 'Mixed',
+          age_years: normalizedAge,
+          size: formState.size,
+          gender: 'female',
+          color: 'unknown',
+          description,
+          energy_level: 'medium',
+          good_with_kids: false,
+          good_with_pets: false,
+          photo_urls: photoUpload.urls,
+        })
 
-    if (!selectedAnimal) return
+        if (createdAnimal) {
+          setSelectedId(createdAnimal.id)
+          setFormMode(null)
+          resetPhotos()
+          setFeedback({ tone: 'success', message: `${createdAnimal.name} was added to the inventory.` })
+          return
+        }
 
-    const didSave = await updateAnimalDetails(selectedAnimal.id, {
-      name: formState.name.trim(),
-      species,
-      age_years: normalizedAge,
-      size: formState.size,
-      status: formState.status,
-      description,
-      photo_urls: [...selectedAnimal.photo_urls, ...photoUpload.urls],
-    })
+        setFeedback({ tone: 'error', message: 'Animal creation failed. The optimistic item was removed.' })
+        return
+      }
 
-    if (didSave) {
-      setFormMode(null)
-      resetPhotos()
-      setFeedback({ tone: 'success', message: `${formState.name.trim()} was updated.` })
-    } else {
-      setFeedback({ tone: 'error', message: 'Animal update failed. Changes were rolled back.' })
+      if (!selectedAnimal) return
+
+      const didSave = await updateAnimalDetails(selectedAnimal.id, {
+        name: formState.name.trim(),
+        species,
+        age_years: normalizedAge,
+        size: formState.size,
+        status: formState.status,
+        description,
+        photo_urls: [...selectedAnimal.photo_urls, ...photoUpload.urls],
+      })
+
+      if (didSave) {
+        setFormMode(null)
+        resetPhotos()
+        setFeedback({ tone: 'success', message: `${formState.name.trim()} was updated.` })
+      } else {
+        setFeedback({ tone: 'error', message: 'Animal update failed. Changes were rolled back.' })
+      }
+    } finally {
+      setIsSubmittingForm(false)
     }
   }
 
-  const isSaving = isCreating || Boolean(selectedAnimal && pendingAnimalIds.has(selectedAnimal.id))
+  const isSaving =
+    isSubmittingForm || isCreating || Boolean(selectedAnimal && pendingAnimalIds.has(selectedAnimal.id))
   const isFormOpen = formMode !== null
   const panelTitle = isFormOpen ? (formMode === 'create' ? 'Create animal' : 'Edit animal') : 'Animal details'
 

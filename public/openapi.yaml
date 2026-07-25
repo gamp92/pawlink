@@ -530,9 +530,11 @@ paths:
       tags: [Lost & Found (F3)]
       summary: Genera una signed upload URL de un solo uso para subir una foto
       description: >
-        Endpoint público (sin auth) para que un usuario anónimo suba una foto de reporte
-        directo a Supabase Storage (bucket público `pets`). Una request por foto.
-        El bucket valida tamaño máximo (5MB) y mime type al momento de subir.
+        Endpoint público (sin auth) para subir una foto directo a Supabase Storage
+        (bucket público `pets`). Usado tanto por un usuario anónimo que reporta un
+        pet perdido/encontrado (context: 'lost-found', default) como por el dashboard
+        de la shelter al subir fotos de un animal (context: 'animal'). Una request
+        por foto. El bucket valida tamaño máximo (5MB) y mime type al momento de subir.
       requestBody:
         required: true
         content:
@@ -543,6 +545,7 @@ paths:
               properties:
                 content_type: { type: string, enum: [image/jpeg, image/png, image/webp] }
                 file_name: { type: string, maxLength: 255, description: Metadata opcional — nunca se usa en el path de storage }
+                context: { type: string, enum: [lost-found, animal], default: lost-found, description: Solo cambia la carpeta de storage. 'animal' para fotos de animales del dashboard. }
       responses:
         '201':
           description: >
