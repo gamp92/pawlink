@@ -36,6 +36,13 @@ export function LostFoundReportReview({
       ]),
     },
     {
+      title: 'Photos',
+      step: 'photos',
+      rows: compactRows([
+        ['Selected', form.photos.length > 0 ? `${form.photos.length} photo${form.photos.length === 1 ? '' : 's'}` : undefined],
+      ]),
+    },
+    {
       title: 'Location',
       step: 'location',
       rows: compactRows([
@@ -53,7 +60,7 @@ export function LostFoundReportReview({
 
   return (
     <div className="space-y-4">
-      {sections.map((section) => (
+      {sections.filter((section) => section.rows.length > 0).map((section) => (
         <Card key={section.title} className="rounded-[1.5rem]">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">

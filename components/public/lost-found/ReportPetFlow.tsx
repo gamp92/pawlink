@@ -7,9 +7,11 @@ import { LostFoundReportReview } from '@/components/public/lost-found/LostFoundR
 import { LostFoundReportSuccess } from '@/components/public/lost-found/LostFoundReportSuccess'
 import { PetInformationStep } from '@/components/public/lost-found/PetInformationStep'
 import { ReportLocationStep } from '@/components/public/lost-found/ReportLocationStep'
+import { ReportPhotosStep } from '@/components/public/lost-found/ReportPhotosStep'
 import {
   mapLostFoundReportToApi,
   submitAnonymousLostFoundReport,
+  uploadReportPhotos,
   type LostFoundReportApiPayload,
 } from '@/components/public/lost-found/lost-found-report-adapter'
 import type {
@@ -24,12 +26,14 @@ import type { LostFoundReport } from '@/lib/mock-data'
 
 const reportSteps: Array<{ id: LostFoundFlowStep; label: string; description: string; icon: string }> = [
   { id: 'pet', label: 'Pet', description: 'What happened', icon: 'Pet' },
+  { id: 'photos', label: 'Photos', description: 'Add images', icon: 'Photo' },
   { id: 'location', label: 'Location', description: 'Map pin', icon: 'Map' },
   { id: 'review', label: 'Review', description: 'Confirm', icon: 'Done' },
 ]
 
 const stepTitles: Record<LostFoundFlowStep, string> = {
   pet: 'Pet and incident details',
+  photos: 'Add photos',
   location: 'Location',
   review: 'Review report',
 }
@@ -125,7 +129,7 @@ export function ReportPetFlow({
     return mapLostFoundReportToApi(form)
   }
 
-  function buildVisibleReport(submissionResult: LostFoundReportSubmissionResult): LostFoundReport | null {
+  function buildVisibleReport(submissionResult: LostFoundReportSubmissionResult, photoUrls: string[]): LostFoundReport | null {
     if (!form.species || !form.location) return null
 
     return {
@@ -136,7 +140,7 @@ export function ReportPetFlow({
       breed: form.breed.trim() || 'Mixed',
       color: form.color.trim(),
       description: form.description.trim(),
-      photo_urls: [],
+      photo_urls: photoUrls,
       location: {
         lat: form.location.lat,
         lng: form.location.lng,
@@ -157,10 +161,19 @@ export function ReportPetFlow({
     setIsSubmitting(true)
     setSubmitError(null)
     try {
-      const submissionResult = await submitAnonymousLostFoundReport(payload)
+      const photoUpload = await uploadReportPhotos(form.photos)
+      if (!photoUpload.ok) {
+        setSubmitError(photoUpload.error)
+        return
+      }
+
+      const submissionResult = await submitAnonymousLostFoundReport({
+        ...payload,
+        ...(photoUpload.urls.length > 0 && { photo_urls: photoUpload.urls }),
+      })
       if (submissionResult.ok) {
         setResult(submissionResult.result)
-        const createdReport = buildVisibleReport(submissionResult.result)
+        const createdReport = buildVisibleReport(submissionResult.result, photoUpload.urls)
         if (createdReport) onSubmitted?.(createdReport)
       } else {
         setSubmitError(submissionResult.error)
@@ -254,6 +267,7 @@ export function ReportPetFlow({
           ) : (
             <div className="report-flow-content space-y-4">
               {step === 'pet' ? <PetInformationStep {...stepProps} /> : null}
+              {step === 'photos' ? <ReportPhotosStep {...stepProps} /> : null}
               {step === 'location' ? <ReportLocationStep {...stepProps} /> : null}
               {step === 'review' ? <LostFoundReportReview form={form} onEdit={setStep} /> : null}
               {submitError ? <ErrorState title="Report not ready" description={submitError} /> : null}
