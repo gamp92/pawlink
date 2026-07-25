@@ -122,18 +122,20 @@ Updates a report — typically to mark it as resolved.
 ## Photo Uploads
 
 ### POST /api/uploads
-Mints a single-use signed upload URL so an anonymous user can upload one report photo
-directly to Supabase Storage (public `pets` bucket). One request per photo.
+Mints a single-use signed upload URL so a photo can be uploaded directly to
+Supabase Storage (public `pets` bucket). One request per photo. Used by
+anonymous Lost & Found reports and by the shelter dashboard's animal photos.
 
-**Auth:** None. Public endpoint.
+**Auth:** None. Public endpoint — same trust model as every other write endpoint today.
 
 **Request body:**
 ```json
-{ "file_name": "foto.jpg", "content_type": "image/jpeg" }
+{ "file_name": "foto.jpg", "content_type": "image/jpeg", "context": "lost-found" }
 ```
 
 **Validation:**
 - `content_type` required — exactly `image/jpeg`, `image/png` or `image/webp`
+- `context` optional — `lost-found` (default) or `animal`. Only changes the storage folder.
 - `file_name` optional metadata, max 255 chars — never used in the storage path
 
 **Response 201:**
@@ -144,15 +146,16 @@ directly to Supabase Storage (public `pets` bucket). One request per photo.
   "expires_in": 7200
 }
 ```
+`context: "animal"` produces the same shape with `animals/<uuid>.<ext>` in place of `lost-found/<uuid>.<ext>`.
 
 **Client flow (per photo):**
-1. `POST /api/uploads` with the file's `content_type`
+1. `POST /api/uploads` with the file's `content_type` (and `context` if uploading an animal photo)
 2. `PUT upload_url` with the raw file bytes and a `Content-Type` header
-3. Collect `public_url` and submit the report with `photo_urls: [public_url, ...]`
+3. Collect `public_url` and submit it in the calling resource's `photo_urls`
 
 **Notes:**
 - The bucket enforces max 5MB and image mime types at upload time; the token expires in 2 hours and only works for its one path
-- Photos uploaded for reports that are never submitted stay in the bucket (accepted MVP trade-off)
+- Photos uploaded but never attached to a submitted resource stay in the bucket (accepted MVP trade-off)
 - `/api/vision` already accepts these URLs (its allowlist includes the project's Supabase hostname)
 
 **Error 400:**

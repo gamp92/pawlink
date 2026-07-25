@@ -299,6 +299,9 @@ async function checkPhotoUploads() {
 
     const badType = await api('POST', '/api/uploads', { file_name: 'doc.pdf', content_type: 'application/pdf' })
     record(badType.status === 400, 'POST content_type no permitido → 400')
+
+    const badContext = await api('POST', '/api/uploads', { content_type: 'image/png', context: 'shelter-secret' })
+    record(badContext.status === 400, 'POST context inválido → 400')
   } finally {
     if (hasServiceAccess && storagePath) {
       const del = await fetch(`${SUPA_URL}/storage/v1/object/pets/${storagePath}`, {
@@ -309,6 +312,32 @@ async function checkPhotoUploads() {
     } else {
       skip('cleanup foto', 'sin service role — quedó una foto smoke en el bucket')
     }
+  }
+
+  const animalUpload = await api('POST', '/api/uploads', { content_type: 'image/png', context: 'animal' })
+  const animalShapeOk = animalUpload.status === 201 && Boolean(animalUpload.json?.upload_url) && Boolean(animalUpload.json?.public_url)
+  record(animalShapeOk, "POST /api/uploads con context: 'animal' → 201")
+  if (!animalShapeOk) return
+
+  const { upload_url: animalUploadUrl, public_url: animalPublicUrl } = animalUpload.json
+  const animalPath = decodeURIComponent(new URL(animalPublicUrl).pathname.split('/object/public/pets/')[1] ?? '')
+  record(animalPath.startsWith('animals/'), 'path va a la carpeta animals/, no lost-found/', animalPath)
+
+  const animalUploaded = await fetch(animalUploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'image/png' },
+    body: Buffer.from(TINY_PNG_BASE64, 'base64'),
+  })
+  record(animalUploaded.ok, 'PUT animal al upload_url → subida directa a Storage', `status ${animalUploaded.status}`)
+
+  if (hasServiceAccess && animalPath) {
+    const del = await fetch(`${SUPA_URL}/storage/v1/object/pets/${animalPath}`, {
+      method: 'DELETE',
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+    })
+    record(del.ok, 'cleanup foto de animal (via service role)')
+  } else {
+    skip('cleanup foto de animal', 'sin service role')
   }
 }
 
