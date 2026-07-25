@@ -119,6 +119,49 @@ Updates a report — typically to mark it as resolved.
 
 ---
 
+## Photo Uploads
+
+### POST /api/uploads
+Mints a single-use signed upload URL so an anonymous user can upload one report photo
+directly to Supabase Storage (public `pets` bucket). One request per photo.
+
+**Auth:** None. Public endpoint.
+
+**Request body:**
+```json
+{ "file_name": "foto.jpg", "content_type": "image/jpeg" }
+```
+
+**Validation:**
+- `content_type` required — exactly `image/jpeg`, `image/png` or `image/webp`
+- `file_name` optional metadata, max 255 chars — never used in the storage path
+
+**Response 201:**
+```json
+{
+  "upload_url": "https://<project>.supabase.co/storage/v1/object/upload/sign/pets/lost-found/<uuid>.jpg?token=...",
+  "public_url": "https://<project>.supabase.co/storage/v1/object/public/pets/lost-found/<uuid>.jpg",
+  "expires_in": 7200
+}
+```
+
+**Client flow (per photo):**
+1. `POST /api/uploads` with the file's `content_type`
+2. `PUT upload_url` with the raw file bytes and a `Content-Type` header
+3. Collect `public_url` and submit the report with `photo_urls: [public_url, ...]`
+
+**Notes:**
+- The bucket enforces max 5MB and image mime types at upload time; the token expires in 2 hours and only works for its one path
+- Photos uploaded for reports that are never submitted stay in the bucket (accepted MVP trade-off)
+- `/api/vision` already accepts these URLs (its allowlist includes the project's Supabase hostname)
+
+**Error 400:**
+```json
+{ "error": "content_type must be image/jpeg, image/png or image/webp" }
+```
+
+---
+
 ## Vision Matching
 
 ### POST /api/vision
