@@ -356,6 +356,48 @@ async function checkPhotoUploads() {
   }
 }
 
+// ── Shelter document upload: signed URL to the PRIVATE documents bucket ────
+
+const TINY_PDF_TEXT =
+  '%PDF-1.1\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 3 3]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF'
+
+async function checkShelterDocumentUpload(shelterId) {
+  console.log('\nDocumentos del shelter (signed URL a bucket privado):')
+
+  const minted = await api('POST', '/api/uploads', {
+    content_type: 'application/pdf', context: 'document', shelter_id: shelterId,
+  })
+  const mintOk =
+    minted.status === 201 &&
+    Boolean(minted.json?.upload_url) &&
+    minted.json?.public_url === null &&
+    Boolean(minted.json?.storage_path)
+  record(mintOk, "POST /api/uploads con context: 'document' → 201, public_url null, con storage_path", JSON.stringify(minted.json))
+  if (!mintOk) return
+
+  const { upload_url, storage_path } = minted.json
+  record(storage_path.startsWith(`${shelterId}/`), 'storage_path va dentro de la carpeta del shelter', storage_path)
+
+  const putRes = await fetch(upload_url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/pdf' },
+    body: Buffer.from(TINY_PDF_TEXT, 'utf8'),
+  })
+  record(putRes.ok, 'PUT del PDF al upload_url → subida directa a Storage (bucket privado)', `status ${putRes.status}`)
+
+  const wrongType = await api('POST', '/api/uploads', {
+    content_type: 'image/png', context: 'document', shelter_id: shelterId,
+  })
+  record(wrongType.status === 400, 'POST context document con content_type de imagen → 400')
+
+  const noShelterId = await api('POST', '/api/uploads', {
+    content_type: 'application/pdf', context: 'document',
+  })
+  record(noShelterId.status === 400, 'POST context document sin shelter_id → 400')
+
+  return { storage_path }
+}
+
 // ── Vision + matching ───────────────────────────────────────────────────────
 
 async function checkVision() {
@@ -468,6 +510,7 @@ async function main() {
   await checkLostFoundLifecycle()
   await checkAlertSubscriptions()
   await checkPhotoUploads()
+  await checkShelterDocumentUpload(shelterId)
   await checkVision()
   await checkVisionMatchCandidates()
   if (RUN_MATCHING) await checkMatching()
