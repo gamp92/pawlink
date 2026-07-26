@@ -172,6 +172,51 @@ Updates the status of an adoption request.
 
 ---
 
+## Shelter Documents
+
+Not connected to the RAG assistant — these are stored in this repo's own database and Storage, separately from the pawlink-rag service the chat widget reads from.
+
+### POST /api/documents
+Registers a document after the client's direct upload succeeds — see `f3-lost-found.md` § Photo Uploads, `context: "document"`, for the signed-URL step that must happen first.
+
+**Request body:**
+```json
+{ "shelter_id": "uuid", "file_name": "politicas_adopcion.pdf", "storage_path": "uuid/uuid.pdf" }
+```
+
+**Response 201:**
+```json
+{ "document": { "id": "uuid", "file_name": "politicas_adopcion.pdf", "status": "ready", "created_at": "2025-06-09T00:00:00Z" } }
+```
+
+**Error 400:** `{ "error": "shelter_id is required" }`, `{ "error": "file_name is required, up to 255 chars" }`, `{ "error": "storage_path is required" }`
+
+---
+
+### GET /api/documents
+Lists a shelter's uploaded documents, newest first.
+
+**Query params:** `shelter_id` (uuid, required)
+
+**Response 200:**
+```json
+{
+  "documents": [
+    { "id": "uuid", "file_name": "politicas_adopcion.pdf", "status": "ready", "created_at": "2025-06-09T00:00:00Z" }
+  ],
+  "total": 1
+}
+```
+
+---
+
+### DELETE /api/documents/:id
+Deletes a document — removes the Storage object (best-effort) and the row.
+
+**Response 200:** `{ "message": "Document deleted" }`
+
+---
+
 ## Shelter Profile
 
 ### GET /api/shelters/:id

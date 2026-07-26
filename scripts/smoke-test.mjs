@@ -395,7 +395,34 @@ async function checkShelterDocumentUpload(shelterId) {
   })
   record(noShelterId.status === 400, 'POST context document sin shelter_id → 400')
 
-  return { storage_path }
+  const registered = await api('POST', '/api/documents', {
+    shelter_id: shelterId, file_name: 'SMOKE-politicas.pdf', storage_path,
+  })
+  record(registered.status === 201 && Boolean(registered.json?.document?.id), 'POST /api/documents (registro) → 201', JSON.stringify(registered.json))
+  const documentId = registered.json?.document?.id
+  if (!documentId) return
+
+  try {
+    const list = await api('GET', `/api/documents?shelter_id=${shelterId}`)
+    const found = list.json?.documents?.find((d) => d.id === documentId)
+    record(Boolean(found) && found.file_name === 'SMOKE-politicas.pdf', 'GET /api/documents incluye el documento recien registrado', found?.file_name)
+  } finally {
+    const deleted = await api('DELETE', `/api/documents/${documentId}`)
+    record(deleted.status === 200, 'DELETE /api/documents/[id] → 200')
+
+    const listAfter = await api('GET', `/api/documents?shelter_id=${shelterId}`)
+    const stillThere = listAfter.json?.documents?.some((d) => d.id === documentId)
+    record(!stillThere, 'el documento ya no aparece tras el delete')
+
+    if (hasServiceAccess) {
+      const stillInStorage = await fetch(`${SUPA_URL}/storage/v1/object/documents/${storage_path}`, {
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+      })
+      record(stillInStorage.status === 400 || stillInStorage.status === 404, 'el archivo ya no existe en Storage tras el delete', `status ${stillInStorage.status}`)
+    } else {
+      skip('verificar borrado en Storage', 'sin service role')
+    }
+  }
 }
 
 // ── Vision + matching ───────────────────────────────────────────────────────

@@ -565,6 +565,72 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '500': { $ref: '#/components/responses/ServerError' }
 
+  /api/documents:
+    post:
+      tags: [Animals (F1)]
+      summary: Registra un documento del shelter tras subirlo a Storage
+      description: >
+        Segundo paso del flujo de subida (ver POST /api/uploads, context: 'document').
+        No conectado al RAG assistant — este documento no alimenta el chatbot.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shelter_id, file_name, storage_path]
+              properties:
+                shelter_id: { type: string, format: uuid }
+                file_name: { type: string, maxLength: 255 }
+                storage_path: { type: string, example: 9f8e.../abc.pdf }
+      responses:
+        '201':
+          description: Documento registrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  document: { $ref: '#/components/schemas/Document' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    get:
+      tags: [Animals (F1)]
+      summary: Lista los documentos subidos por un shelter
+      parameters:
+        - { name: shelter_id, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Lista de documentos (orden created_at desc)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documents:
+                    type: array
+                    items: { $ref: '#/components/schemas/Document' }
+                  total: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/documents/{id}:
+    delete:
+      tags: [Animals (F1)]
+      summary: Elimina un documento (Storage + fila)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Documento eliminado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: Document deleted }
+        '500': { $ref: '#/components/responses/ServerError' }
+
   /api/vision:
     post:
       tags: [Lost & Found (F3)]
@@ -620,6 +686,14 @@ components:
       type: object
       properties:
         error: { type: string, example: shelter_id is required }
+
+    Document:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        file_name: { type: string, example: politicas_adopcion.pdf }
+        status: { type: string, example: ready }
+        created_at: { type: string, format: date-time }
 
     Animal:
       type: object
