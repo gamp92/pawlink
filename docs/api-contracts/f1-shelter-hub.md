@@ -45,6 +45,8 @@ species     string   optional — 'dog' | 'cat' | 'other'
 ### POST /api/animals
 Creates a new animal. Triggers N8N webhook to generate social post.
 
+**Photos:** obtain each `photo_urls` entry via `POST /api/uploads` with `"context": "animal"` — see `f3-lost-found.md` § Photo Uploads for the full contract.
+
 **Request body:**
 ```json
 {
