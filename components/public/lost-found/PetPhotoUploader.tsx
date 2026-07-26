@@ -2,10 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/shared/Button'
 import type { SelectedPetPhoto } from '@/components/public/lost-found/types'
 
-// TODO: Re-enable this uploader in the active Report Pet flow after the backend
-// provides an anonymous Supabase Storage upload contract that returns permanent
-// photo URLs accepted by POST /api/lost-found.
-
+// Must match the content types POST /api/uploads (and the pets Storage bucket) accept.
+const allowedContentTypes = ['image/jpeg', 'image/png', 'image/webp']
 const maxFileSizeBytes = 5 * 1024 * 1024
 
 export function PetPhotoUploader({
@@ -35,8 +33,8 @@ export function PetPhotoUploader({
     const rejected: string[] = []
 
     Array.from(files).forEach((file) => {
-      if (!file.type.startsWith('image/')) {
-        rejected.push(`${file.name} is not an image.`)
+      if (!allowedContentTypes.includes(file.type)) {
+        rejected.push(`${file.name} must be a JPG, PNG or WebP image.`)
         return
       }
       if (file.size > maxFileSizeBytes) {
@@ -86,13 +84,13 @@ export function PetPhotoUploader({
         <span className="mt-4 text-lg font-black text-slate-950">Add pet images</span>
         <span className="mt-1 text-sm font-semibold text-slate-500">Tap to choose images or drag them here</span>
         <span className="mt-2 rounded-full bg-white/80 px-3 py-1 text-xs font-bold text-violet-700 shadow-sm">
-          JPG, PNG, HEIC style images up to 5MB each
+          JPG, PNG or WebP, up to 5MB each
         </span>
       </label>
       <input
         id="pet-photos"
         type="file"
-        accept="image/*"
+        accept={allowedContentTypes.join(',')}
         multiple
         onChange={(event) => {
           addPhotos(event.target.files)
@@ -104,7 +102,7 @@ export function PetPhotoUploader({
 
       <div className="mt-3 flex items-center justify-between text-xs font-bold text-slate-500">
         <span>{photos.length} selected</span>
-        <span>Previews only</span>
+        <span>Uploaded when you submit</span>
       </div>
 
       {photos.length ? (

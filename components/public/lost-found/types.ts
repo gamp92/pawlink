@@ -1,6 +1,6 @@
 import type { ReportType, Species } from '@/lib/mock-data'
 
-export type LostFoundFlowStep = 'pet' | 'location' | 'review'
+export type LostFoundFlowStep = 'pet' | 'photos' | 'location' | 'review'
 export type AlertFlowStep = 'contact' | 'location' | 'review'
 
 export type SelectedLocation = {
@@ -27,8 +27,6 @@ export type LostFoundReportForm = {
   location_notes: string
   city: string
   location: SelectedLocation | null
-  // TODO: Re-enable photo selection only after the backend accepts permanent
-  // Supabase Storage URLs during anonymous report submission.
   photos: SelectedPetPhoto[]
 }
 
@@ -45,6 +43,7 @@ export type AnonymousLostFoundReportPayload = {
     lat: number
     lng: number
   }
+  photo_urls?: string[]
 }
 
 export type LostFoundReportSubmissionResult = {
