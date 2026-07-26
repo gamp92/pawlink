@@ -407,9 +407,14 @@ function SocialPostCard({ socialPost }: { socialPost: string | null }) {
 
   async function copyPost() {
     if (!socialPost) return
-    await navigator.clipboard.writeText(socialPost)
-    setWasCopied(true)
-    setTimeout(() => setWasCopied(false), 2000)
+    try {
+      await navigator.clipboard.writeText(socialPost)
+      setWasCopied(true)
+      setTimeout(() => setWasCopied(false), 2000)
+    } catch {
+      // Clipboard write can fail (insecure context, denied permission) — leave
+      // the button label unchanged rather than throwing an unhandled rejection.
+    }
   }
 
   return (

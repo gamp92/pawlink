@@ -198,6 +198,11 @@ async function checkAdoptionLifecycle(shelterId) {
 
 // ── Adoption approval must mark the animal as adopted (own throwaway animal,
 // never the seeded gallery one — approving would corrupt shared demo data) ──
+//
+// Unlike checkAdoptionLifecycle (which stops at 'seen' to avoid a real send),
+// this test intentionally approves — it needs the real status transition to
+// verify the animal sync, and the confirmation email lands in the team's
+// shared test+ inbox, same as every other smoke-triggered email in this file.
 
 async function checkAdoptionApprovalMarksAnimalAdopted(shelterId) {
   console.log('\nAprobar una solicitud marca el animal como adoptado:')
