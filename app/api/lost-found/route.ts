@@ -94,10 +94,64 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  if (Array.isArray(rest.photo_urls) && rest.photo_urls.length > 0) {
+    try {
+      await attemptAutoMatch(request, supabase, data.id, report_type)
+    } catch {
+      // Vision matching is best-effort — report creation must succeed regardless.
+    }
+  }
+
   return NextResponse.json(
     { report: data, message: 'Report submitted. Nearby users will be alerted automatically.' },
     { status: 201 }
   )
+}
+
+// Vercel Functions have a 10s budget and each comparison costs a real
+// Rekognition round trip, so this only checks a few of the most recent open
+// candidates of the opposite type — not an exhaustive scan.
+const MAX_MATCH_CANDIDATES = 3
+
+async function attemptAutoMatch(
+  request: Request,
+  supabase: ReturnType<typeof createServerClient>,
+  reportId: string,
+  reportType: string
+): Promise<void> {
+  const opposingType = reportType === 'lost' ? 'found' : 'lost'
+
+  const { data: candidates } = await supabase
+    .from('lost_found_reports')
+    .select('id, photo_urls')
+    .eq('status', 'open')
+    .eq('report_type', opposingType)
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  const withPhotos = (candidates ?? []).filter(
+    (candidate) => Array.isArray(candidate.photo_urls) && candidate.photo_urls.length > 0
+  )
+
+  const origin = new URL(request.url).origin
+  for (const candidate of withPhotos.slice(0, MAX_MATCH_CANDIDATES)) {
+    if (await tryVisionMatch(origin, reportId, candidate.id)) return
+  }
+}
+
+async function tryVisionMatch(origin: string, sourceId: string, targetId: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${origin}/api/vision`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_report_id: sourceId, target_report_id: targetId }),
+    })
+    if (!response.ok) return false
+    const body = await response.json()
+    return Boolean(body?.match?.is_match)
+  } catch {
+    return false
+  }
 }
 
 interface GeoPoint {
