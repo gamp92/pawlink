@@ -196,6 +196,46 @@ async function checkAdoptionLifecycle(shelterId) {
   }
 }
 
+// ── Adoption approval must mark the animal as adopted (own throwaway animal,
+// never the seeded gallery one — approving would corrupt shared demo data) ──
+
+async function checkAdoptionApprovalMarksAnimalAdopted(shelterId) {
+  console.log('\nAprobar una solicitud marca el animal como adoptado:')
+  if (!hasServiceAccess) return skip('aprobación marca adoptado', 'sin service role para cleanup')
+
+  const animal = await api('POST', '/api/animals', {
+    shelter_id: shelterId, name: 'SMOKE-Adopt-Sync', species: 'dog', breed: 'Mestizo',
+    age_years: 3, size: 'medium', gender: 'male', color: 'blanco',
+    description: 'Animal de smoke test para aprobación de adopción.', energy_level: 'medium', good_with_kids: true,
+  })
+  const animalId = animal.json?.animal?.id
+  if (!animalId) return record(false, 'aprobación marca adoptado', 'no se pudo crear el animal de prueba')
+
+  try {
+    const created = await api('POST', '/api/adoption-requests', {
+      animal_id: animalId, shelter_id: shelterId,
+      full_name: 'SMOKE Adopt Sync', email: 'test+smokeadoptsync@gmail.com',
+    })
+    const requestId = created.json?.request?.id
+    if (!requestId) return record(false, 'aprobación marca adoptado', 'no se pudo crear la solicitud')
+
+    try {
+      const approved = await api('PATCH', `/api/adoption-requests/${requestId}`, { status: 'approved' })
+      record(approved.status === 200 && approved.json?.request?.status === 'approved', "PATCH a 'approved' → 200")
+
+      const list = await api('GET', `/api/animals?shelter_id=${shelterId}`)
+      const found = list.json?.animals?.find((a) => a.id === animalId)
+      record(found?.status === 'adopted', 'el animal quedó en status adopted tras la aprobación', found?.status)
+    } finally {
+      const del = await supaRest('DELETE', `adoption_requests?id=eq.${requestId}`)
+      record(del.status === 204, 'cleanup solicitud (via service role)')
+    }
+  } finally {
+    const deleted = await api('DELETE', `/api/animals/${animalId}`)
+    record(deleted.status === 200, 'cleanup animal (via service role)')
+  }
+}
+
 // ── Lost & Found lifecycle: POST (geo-alert) → alert debug → PATCH ──────────
 
 async function checkLostFoundLifecycle() {
@@ -465,6 +505,7 @@ async function main() {
   const { shelterId } = await checkReads()
   await checkAnimalLifecycle(shelterId)
   await checkAdoptionLifecycle(shelterId)
+  await checkAdoptionApprovalMarksAnimalAdopted(shelterId)
   await checkLostFoundLifecycle()
   await checkAlertSubscriptions()
   await checkPhotoUploads()

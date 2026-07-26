@@ -168,7 +168,9 @@ Updates the status of an adoption request.
 }
 ```
 
-**Side effect (approved only):** Supabase Database Webhook triggers `adoption-confirmation` Edge Function → sends confirmation email to family via Resend.
+**Side effects (approved only):**
+- The animal's own `status` is set to `adopted` (synchronous, part of this same request)
+- Supabase Database Webhook triggers `adoption-confirmation` Edge Function → sends confirmation email to family via Resend
 
 ---
 

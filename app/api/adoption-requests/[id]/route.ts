@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 
 // PATCH /api/adoption-requests/:id
-// Updates status of an adoption request
+// Updates status of an adoption request. Approving also marks the animal
+// itself as adopted — this was previously missing, leaving approved
+// requests pointing at animals that still showed as available.
 // Side effect (approved): Supabase Database Webhook triggers adoption-confirmation Edge Function
 // Contract: docs/api-contracts/f1-shelter-hub.md
 export async function PATCH(
@@ -23,12 +25,26 @@ export async function PATCH(
     .from('adoption_requests')
     .update({ ...(status && { status }), ...(notes !== undefined && { notes }) })
     .eq('id', params.id)
-    .select('id, status, updated_at')
+    .select('id, status, updated_at, animal_id')
     .single()
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ request: data }, { status: 200 })
+  if (data.status === 'approved') {
+    const { error: animalError } = await supabase
+      .from('animals')
+      .update({ status: 'adopted' })
+      .eq('id', data.animal_id)
+
+    if (animalError) {
+      return NextResponse.json({ error: 'Could not mark the animal as adopted' }, { status: 500 })
+    }
+  }
+
+  return NextResponse.json(
+    { request: { id: data.id, status: data.status, updated_at: data.updated_at } },
+    { status: 200 }
+  )
 }
