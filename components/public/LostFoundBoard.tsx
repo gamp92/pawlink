@@ -66,15 +66,6 @@ const speciesIcon: Record<Species, string> = {
   other: 'Pet',
 }
 
-const visualFallbackLocations: LostFoundReport['location'][] = [
-  { lat: 19.4129, lng: -99.1727 },
-  { lat: 19.4141, lng: -99.1704 },
-  { lat: 19.4118, lng: -99.1742 },
-  { lat: 19.4162, lng: -99.1688 },
-  { lat: 19.4098, lng: -99.1763 },
-  { lat: 19.4182, lng: -99.1749 },
-]
-
 function isValidCoordinate(lat: unknown, lng: unknown): lat is number {
   return (
     typeof lat === 'number' &&
@@ -86,22 +77,18 @@ function isValidCoordinate(lat: unknown, lng: unknown): lat is number {
   )
 }
 
-function fallbackLocationFor(index: number) {
-  return visualFallbackLocations[index % visualFallbackLocations.length]
-}
-
-function parseApiLocation(location: ApiLocation, index: number): LostFoundReport['location'] {
-  if (!location) return fallbackLocationFor(index)
+// Returns null when the location cannot be read. Never invent a position:
+// a wrong pin misleads people searching for a real pet (fabricated fallback
+// positions hid a backend serialization bug for weeks).
+function parseApiLocation(location: ApiLocation): LostFoundReport['location'] | null {
+  if (!location) return null
 
   if (typeof location === 'string') {
     const match = location.match(/POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i)
-    if (match) {
-      const lng = Number(match[1])
-      const lat = Number(match[2])
-      if (isValidCoordinate(lat, lng)) return { lat, lng }
-    }
-
-    return fallbackLocationFor(index)
+    if (!match) return null
+    const lng = Number(match[1])
+    const lat = Number(match[2])
+    return isValidCoordinate(lat, lng) ? { lat, lng } : null
   }
 
   if ('coordinates' in location && Array.isArray(location.coordinates)) {
@@ -121,10 +108,10 @@ function parseApiLocation(location: ApiLocation, index: number): LostFoundReport
     if (isValidCoordinate(lat, lng)) return { lat, lng }
   }
 
-  return fallbackLocationFor(index)
+  return null
 }
 
-function toLostFoundReport(apiReport: ApiLostFoundReport, index: number): LostFoundReport {
+function toLostFoundReport(apiReport: ApiLostFoundReport, location: LostFoundReport['location']): LostFoundReport {
   return {
     id: apiReport.id,
     report_type: apiReport.report_type,
@@ -134,7 +121,7 @@ function toLostFoundReport(apiReport: ApiLostFoundReport, index: number): LostFo
     color: apiReport.color ?? 'unknown',
     description: apiReport.description ?? 'No description provided yet.',
     photo_urls: apiReport.photo_urls ?? [],
-    location: parseApiLocation(apiReport.location, index),
+    location,
     location_notes: apiReport.location_notes ?? 'Location shared by the community',
     city: apiReport.city ?? 'CDMX',
     status: apiReport.status,
@@ -142,6 +129,24 @@ function toLostFoundReport(apiReport: ApiLostFoundReport, index: number): LostFo
     match_confidence: apiReport.match_confidence,
     created_at: apiReport.created_at,
   }
+}
+
+// Adapts API reports, dropping any whose location cannot be read (with a count
+// so the UI can say so instead of plotting them somewhere wrong).
+function adaptApiReports(apiReports: ApiLostFoundReport[]): { reports: LostFoundReport[]; unmappable: number } {
+  const reports: LostFoundReport[] = []
+  let unmappable = 0
+
+  apiReports.forEach((apiReport) => {
+    const location = parseApiLocation(apiReport.location)
+    if (!location) {
+      unmappable += 1
+      return
+    }
+    reports.push(toLostFoundReport(apiReport, location))
+  })
+
+  return { reports, unmappable }
 }
 
 function formatDate(value: string) {
@@ -216,11 +221,15 @@ export function LostFoundBoard() {
           return
         }
 
-        const nextReports = apiReports.map(toLostFoundReport)
+        const { reports: nextReports, unmappable } = adaptApiReports(apiReports)
         setReports(nextReports)
         setSelectedId(nextReports[0]?.id ?? '')
         setIsUsingFallback(false)
-        setError(null)
+        setError(
+          unmappable > 0
+            ? `${unmappable} report${unmappable === 1 ? '' : 's'} had an unreadable location and ${unmappable === 1 ? 'is' : 'are'} not shown on the map.`
+            : null,
+        )
       } catch {
         if (!isMounted) return
         setReports(lostFoundReports)
@@ -389,7 +398,10 @@ export function LostFoundBoard() {
 
       {error ? (
         <div className="mb-4">
-          <ErrorState title="Using fallback reports" description={error} />
+          <ErrorState
+            title={isUsingFallback ? 'Using fallback reports' : 'Some reports are not shown on the map'}
+            description={error}
+          />
         </div>
       ) : null}
 
