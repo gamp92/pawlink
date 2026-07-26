@@ -370,6 +370,8 @@ export function AnimalInventory() {
                 </Badge>
               </div>
 
+              <SocialPostCard socialPost={selectedAnimal.social_post} />
+
               <div className="mt-4 grid gap-2">
                 {statuses.map((status) => (
                   <button
@@ -397,5 +399,38 @@ export function AnimalInventory() {
         </BottomSheet>
       </div>
     </ShelterHubLayout>
+  )
+}
+
+function SocialPostCard({ socialPost }: { socialPost: string | null }) {
+  const [wasCopied, setWasCopied] = useState(false)
+
+  async function copyPost() {
+    if (!socialPost) return
+    await navigator.clipboard.writeText(socialPost)
+    setWasCopied(true)
+    setTimeout(() => setWasCopied(false), 2000)
+  }
+
+  return (
+    <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-black uppercase tracking-wide text-slate-500">Social post (AI-generated)</p>
+        {socialPost ? (
+          <button
+            type="button"
+            onClick={copyPost}
+            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-black text-violet-700 shadow-sm transition hover:border-violet-200 hover:bg-violet-50"
+          >
+            {wasCopied ? 'Copied!' : 'Copy'}
+          </button>
+        ) : null}
+      </div>
+      {socialPost ? (
+        <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{socialPost}</p>
+      ) : (
+        <p className="mt-2 text-sm font-semibold text-slate-400">Generating... check back in a few seconds.</p>
+      )}
+    </div>
   )
 }
