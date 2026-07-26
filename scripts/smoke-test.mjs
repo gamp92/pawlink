@@ -395,6 +395,11 @@ async function checkShelterDocumentUpload(shelterId) {
   })
   record(noShelterId.status === 400, 'POST context document sin shelter_id → 400')
 
+  const emptyShelterId = await api('POST', '/api/uploads', {
+    content_type: 'application/pdf', context: 'document', shelter_id: '',
+  })
+  record(emptyShelterId.status === 400, 'POST context document con shelter_id vacío → 400')
+
   const registered = await api('POST', '/api/documents', {
     shelter_id: shelterId, file_name: 'SMOKE-politicas.pdf', storage_path,
   })

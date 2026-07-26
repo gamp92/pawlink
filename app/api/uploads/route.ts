@@ -101,7 +101,7 @@ function validateUploadRequest(body: Partial<UploadRequestBody>, context: string
   if (body.file_name != null && (typeof body.file_name !== 'string' || body.file_name.length > 255)) {
     return 'file_name must be a string of up to 255 chars'
   }
-  if (context === 'document' && typeof body.shelter_id !== 'string') {
+  if (context === 'document' && (typeof body.shelter_id !== 'string' || body.shelter_id.length === 0)) {
     return 'shelter_id is required for context: document'
   }
   return null
