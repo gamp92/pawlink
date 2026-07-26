@@ -74,9 +74,12 @@ The `document` context is shelter-scoped, unlike the flat `lost-found/` and `ani
 {
   "upload_url": "https://<project>.supabase.co/storage/v1/object/upload/sign/documents/<shelter_id>/<uuid>.pdf?token=...",
   "public_url": null,
+  "storage_path": "<shelter_id>/<uuid>.pdf",
   "expires_in": 7200
 }
 ```
+
+**Spec correction found during planning:** the response needs a new `storage_path` field, returned for every context (harmless addition for the two existing contexts, which derive `public_url` from the same path and don't need to look at it). Without it, a private-bucket caller (the `document` context, where `public_url` is `null`) would have no way to learn the path it just uploaded to, and `POST /api/documents` below requires that exact path to register the row.
 
 ## API — register, list, delete (new route)
 
