@@ -267,9 +267,6 @@ export function LostFoundBoard() {
   )
 
   const selectedReport = visibleReports.find((report) => report.id === selectedId) ?? visibleReports[0]
-  const matchedReport = selectedReport?.matched_report_id
-    ? reports.find((report) => report.id === selectedReport.matched_report_id) ?? null
-    : null
 
   function selectReport(report: LostFoundReport) {
     setSelectedId(report.id)

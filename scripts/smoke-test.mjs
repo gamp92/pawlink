@@ -370,6 +370,18 @@ async function checkVision() {
   if (!sourceId || !targetId) return record(false, 'POST /api/vision', 'no se pudieron crear los reportes de prueba')
 
   try {
+    // B ('found') was just created after A ('lost', same photo, open) already
+    // existed — POST /api/lost-found should have auto-triggered the match right
+    // then. Check this BEFORE the manual /api/vision call below, which would
+    // set matched_report_id itself and mask a missing auto-trigger.
+    const afterCreate = await api('GET', '/api/lost-found?status=open&limit=50')
+    const autoMatched = afterCreate.json?.reports?.find((r) => r.id === targetId)
+    record(
+      autoMatched?.matched_report_id === sourceId,
+      'POST /api/lost-found dispara vision matching automático al crear el 2do reporte',
+      `auto matched_report_id: ${autoMatched?.matched_report_id}`
+    )
+
     const res = await api('POST', '/api/vision', { source_report_id: sourceId, target_report_id: targetId })
     if (res.status === 503) return record(true, 'POST /api/vision', '503: AWS pendiente (esperado hasta configurar credenciales)')
     const match = res.json?.match
