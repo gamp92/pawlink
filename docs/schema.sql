@@ -339,6 +339,36 @@ $$;
 
 
 -- ============================================================
+-- HELPER FUNCTION — candidate selection for automatic vision matching
+-- Called by POST /api/lost-found after inserting a report with a photo.
+-- Opposite report_type, same species, open, has a photo, closest first.
+-- ============================================================
+
+create or replace function get_vision_match_candidates(
+  report_id     uuid,
+  result_limit  int default 3
+)
+returns table(id uuid)
+language sql
+as $$
+  select target.id
+  from lost_found_reports source
+  join lost_found_reports target
+    on target.report_type <> source.report_type
+    and target.species = source.species
+    and target.status = 'open'
+    and coalesce(array_length(target.photo_urls, 1), 0) > 0
+  where source.id = report_id
+  order by ST_Distance(source.location, target.location) asc
+  limit result_limit;
+$$;
+
+-- Same trust posture as get_users_near_report: only the service role calls this.
+revoke execute on function get_vision_match_candidates(uuid, int) from public, anon, authenticated;
+grant execute on function get_vision_match_candidates(uuid, int) to service_role;
+
+
+-- ============================================================
 -- UPDATED_AT TRIGGER
 -- Auto-updates updated_at on every row change
 -- ============================================================
