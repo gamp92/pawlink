@@ -44,14 +44,6 @@ export type AdoptionRequest = {
   created_at: string
 }
 
-export type ShelterDocument = {
-  id: string
-  file_name: string
-  status: 'ready' | 'processing' | 'failed'
-  chunk_count: number | null
-  created_at: string
-}
-
 export type ShelterActivity = {
   id: string
   title: string
@@ -268,30 +260,6 @@ export const adoptionRequests: AdoptionRequest[] = [
       has_other_pets: true,
     },
     created_at: '2025-06-11T15:00:00Z',
-  },
-]
-
-export const shelterDocuments: ShelterDocument[] = [
-  {
-    id: 'doc-policy',
-    file_name: 'politicas_adopcion.pdf',
-    status: 'ready',
-    chunk_count: 12,
-    created_at: '2025-06-09T00:00:00Z',
-  },
-  {
-    id: 'doc-requirements',
-    file_name: 'requisitos_familias.pdf',
-    status: 'processing',
-    chunk_count: null,
-    created_at: '2025-06-13T10:00:00Z',
-  },
-  {
-    id: 'doc-health',
-    file_name: 'protocolo_vacunacion.pdf',
-    status: 'ready',
-    chunk_count: 8,
-    created_at: '2025-06-08T00:00:00Z',
   },
 ]
 

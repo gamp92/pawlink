@@ -104,15 +104,21 @@ flowchart LR
     animalsEdit["PATCH · DELETE<br/>/api/animals/[id]"]
     reqList["GET /api/adoption-requests<br/>?shelter_id"]
     reqUpdate["PATCH<br/>/api/adoption-requests/[id]"]
+    docsUpload["POST /api/uploads<br/>(context: document)"]
+    docsRegister["POST · GET · DELETE<br/>/api/documents"]
 
     tAnimals[("animals")]
     tRequests[("adoption_requests")]
+    tDocuments[("shelter_documents")]
+    documentsBucket[("Storage: documents<br/>(private bucket)")]
 
     F1 --> animalsList -->|reads| tAnimals
     F1 --> animalsCreate -->|writes ⚡ social-post| tAnimals
     F1 --> animalsEdit -->|writes| tAnimals
     F1 --> reqList -->|"reads (joins animals)"| tRequests
     F1 --> reqUpdate -->|"writes status/notes ⚡ adoption-confirmation"| tRequests
+    F1 --> docsUpload -->|"mints signed upload URL<br/>(browser PUTs PDF directly)"| documentsBucket
+    F1 --> docsRegister -->|"reads/writes/deletes"| tDocuments
 ```
 
 ### F2 — Smart Adoption (`/find-a-pet` + `/shelter/[id]`, public)
@@ -183,7 +189,7 @@ flowchart LR
     F4 --> ragDocs -->|"proxy, lists indexed docs"| ragService
 ```
 
-The RAG endpoints are **pure proxies** — they touch no Supabase table in this repo. They exist so the `RAG_INTERNAL_API_KEY` stays server-side; the actual retrieval/generation pipeline lives in the separate `pawlink-rag` service (`RAG_SERVICE_URL`). The F4 tables in `schema.sql` remain commented out — document storage is the service's concern.
+The RAG endpoints are **pure proxies** — they touch no Supabase table in this repo. They exist so the `RAG_INTERNAL_API_KEY` stays server-side; the actual retrieval/generation pipeline lives in the separate `pawlink-rag` service (`RAG_SERVICE_URL`). The F4 tables in `schema.sql` remain commented out — document storage for the RAG assistant is the service's concern. `shelter_documents` (F1, see above) is a separate, unrelated table for the dashboard's own document library — uploading there does not feed the RAG assistant.
 
 ⚡ = the write fires a Database Webhook that triggers the Edge Function named next to it (see section 4).
 
@@ -196,6 +202,10 @@ Full reference table:
 | F1 | `PATCH · DELETE /api/animals/[id]` | — | `animals` | — |
 | F1 | `GET /api/adoption-requests?shelter_id` | `adoption_requests` + `animals` | — | — |
 | F1 | `PATCH /api/adoption-requests/[id]` | — | `adoption_requests` ⚡ adoption-confirmation (on `approved`) | — |
+| F1 | `POST /api/uploads` (context: document) | — | Storage `documents` bucket, `<shelter_id>/` (signed upload URL, no DB write) | — |
+| F1 | `POST /api/documents` | — | `shelter_documents` | — |
+| F1 | `GET /api/documents?shelter_id` | `shelter_documents` | — | — |
+| F1 | `DELETE /api/documents/[id]` | — | `shelter_documents`, Storage `documents` bucket | — |
 | F2 | `GET /api/animals/public` | `animals` (available only) | — | — |
 | F2 | `GET /api/shelters/[id]` | `shelters`, `animals` | — | — |
 | F2 | `POST /api/matching` | `animals` | — | Groq |
@@ -230,6 +240,7 @@ erDiagram
     shelters ||--o{ shelter_users : "has staff"
     shelters ||--o{ animals : "manages"
     shelters ||--o{ adoption_requests : "receives"
+    shelters ||--o{ shelter_documents : "uploads"
     animals ||--o{ adoption_requests : "requested in"
 
     shelters {
@@ -266,6 +277,12 @@ erDiagram
         uuid reporter_id FK "auth.users, nullable"
         uuid matched_report_id FK "self-ref, set by vision match"
         geography location "POINT 4326"
+    }
+    shelter_documents {
+        uuid id PK
+        uuid shelter_id FK
+        text storage_path "private documents bucket"
+        text status "always ready — no ingestion pipeline"
     }
 ```
 
