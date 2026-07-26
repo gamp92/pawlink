@@ -210,6 +210,21 @@ async function checkLostFoundLifecycle() {
   if (!reportId) return
 
   try {
+    // Contract: GET must return location as {lat, lng} numbers — never raw
+    // PostGIS WKB/WKT. Round-trip the exact coordinates we just submitted.
+    const list = await api('GET', '/api/lost-found?limit=50')
+    const listed = list.json?.reports?.find((r) => r.id === reportId)
+    const loc = listed?.location
+    const roundTripOk =
+      typeof loc?.lat === 'number' && typeof loc?.lng === 'number' &&
+      Math.abs(loc.lat - 40.417) < 0.0001 && Math.abs(loc.lng - -3.7035) < 0.0001
+    record(roundTripOk, 'GET devuelve location {lat,lng} con las coordenadas enviadas', JSON.stringify(loc)?.slice(0, 60))
+
+    const allShapesOk = (list.json?.reports ?? []).every(
+      (r) => typeof r.location?.lat === 'number' && typeof r.location?.lng === 'number'
+    )
+    record(allShapesOk, 'todos los reportes del GET traen location {lat,lng} numérico')
+
     const alert = await api('POST', '/api/lost-found/alert', { report_id: reportId, radius_m: 2000 })
     const emails = (alert.json?.alerted_users ?? []).map((u) => u.email)
     const onlyMadrid1 = emails.length === 1 && emails[0] === 'test+madrid1@gmail.com'

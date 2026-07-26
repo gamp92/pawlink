@@ -100,11 +100,49 @@ export async function POST(request: Request) {
   )
 }
 
-function parseLocation(location: any): { lat: number; lng: number } | null {
+interface GeoPoint {
+  lat: number
+  lng: number
+}
+
+function parseLocation(location: unknown): GeoPoint | null {
   if (!location) return null
-  // Supabase returns geography as GeoJSON when using .select()
-  if (location.coordinates) {
-    return { lat: location.coordinates[1], lng: location.coordinates[0] }
+  if (typeof location === 'string') return parseWkbHexPoint(location)
+  if (typeof location !== 'object') return null
+
+  const value = location as { coordinates?: unknown; lat?: unknown; lng?: unknown }
+  if (Array.isArray(value.coordinates)) {
+    const [lng, lat] = value.coordinates.map(Number)
+    return isFiniteCoordinate(lat, lng) ? { lat, lng } : null
   }
-  return location
+  if (typeof value.lat === 'number' && typeof value.lng === 'number') {
+    return isFiniteCoordinate(value.lat, value.lng) ? { lat: value.lat, lng: value.lng } : null
+  }
+  return null
+}
+
+// PostgREST serializes geography columns as (E)WKB hex — e.g.
+// "0101000020E6100000<lng><lat>" — NOT GeoJSON. For a 2D point the layout is
+// fixed: 1-byte order, 4-byte type (bit 0x20000000 = SRID present), optional
+// 4-byte SRID, then two 8-byte doubles (lng first, then lat).
+const WKB_POINT_TYPE = 1
+const WKB_SRID_FLAG = 0x20000000
+
+function parseWkbHexPoint(hex: string): GeoPoint | null {
+  if (!/^(?:[0-9a-fA-F]{42}|[0-9a-fA-F]{50})$/.test(hex)) return null
+
+  const bytes = Buffer.from(hex, 'hex')
+  const littleEndian = bytes[0] === 1
+  const type = littleEndian ? bytes.readUInt32LE(1) : bytes.readUInt32BE(1)
+  if ((type & 0xff) !== WKB_POINT_TYPE) return null
+
+  const offset = (type & WKB_SRID_FLAG) !== 0 ? 9 : 5
+  if (bytes.length < offset + 16) return null
+  const lng = littleEndian ? bytes.readDoubleLE(offset) : bytes.readDoubleBE(offset)
+  const lat = littleEndian ? bytes.readDoubleLE(offset + 8) : bytes.readDoubleBE(offset + 8)
+  return isFiniteCoordinate(lat, lng) ? { lat, lng } : null
+}
+
+function isFiniteCoordinate(lat: number, lng: number): boolean {
+  return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180
 }
