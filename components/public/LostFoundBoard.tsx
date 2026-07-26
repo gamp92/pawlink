@@ -398,7 +398,10 @@ export function LostFoundBoard() {
 
       {error ? (
         <div className="mb-4">
-          <ErrorState title="Using fallback reports" description={error} />
+          <ErrorState
+            title={isUsingFallback ? 'Using fallback reports' : 'Some reports are not shown on the map'}
+            description={error}
+          />
         </div>
       ) : null}
 
