@@ -96,7 +96,7 @@ export async function POST(request: Request) {
 
   if (Array.isArray(rest.photo_urls) && rest.photo_urls.length > 0) {
     try {
-      await attemptAutoMatch(request, supabase, data.id, report_type)
+      await attemptAutoMatch(request, supabase, data.id)
     } catch {
       // Vision matching is best-effort — report creation must succeed regardless.
     }
@@ -109,32 +109,24 @@ export async function POST(request: Request) {
 }
 
 // Vercel Functions have a 10s budget and each comparison costs a real
-// Rekognition round trip, so this only checks a few of the most recent open
-// candidates of the opposite type — not an exhaustive scan.
+// Rekognition round trip, so this only checks a few candidates — the closest
+// open reports of the same species and the opposite type (get_vision_match_
+// candidates does the species/type/photo filtering and distance ordering in
+// SQL), not an exhaustive scan of every open report.
 const MAX_MATCH_CANDIDATES = 3
 
 async function attemptAutoMatch(
   request: Request,
   supabase: ReturnType<typeof createServerClient>,
-  reportId: string,
-  reportType: string
+  reportId: string
 ): Promise<void> {
-  const opposingType = reportType === 'lost' ? 'found' : 'lost'
-
-  const { data: candidates } = await supabase
-    .from('lost_found_reports')
-    .select('id, photo_urls')
-    .eq('status', 'open')
-    .eq('report_type', opposingType)
-    .order('created_at', { ascending: false })
-    .limit(10)
-
-  const withPhotos = (candidates ?? []).filter(
-    (candidate) => Array.isArray(candidate.photo_urls) && candidate.photo_urls.length > 0
-  )
+  const { data: candidates } = await supabase.rpc('get_vision_match_candidates', {
+    report_id: reportId,
+    result_limit: MAX_MATCH_CANDIDATES,
+  })
 
   const origin = new URL(request.url).origin
-  for (const candidate of withPhotos.slice(0, MAX_MATCH_CANDIDATES)) {
+  for (const candidate of candidates ?? []) {
     if (await tryVisionMatch(origin, reportId, candidate.id)) return
   }
 }

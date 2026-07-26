@@ -94,7 +94,7 @@ Triggers two side effects: geo-alert to nearby users and vision matching.
 
 **Side effects on creation:**
 1. Supabase Database Webhook triggers `geo-alert` Edge Function → calls `get_users_near_report()` PostGIS function → sends email alerts to alert subscribers within 2km via Resend (see Alert Subscriptions below)
-2. `/api/vision` is called automatically to compare against existing open reports
+2. If the report has a photo, `/api/vision` is called automatically against up to 3 candidates: the **closest** open reports of the **same species** and the **opposite** type (`get_vision_match_candidates` PostGIS function) — not every open report, to stay inside the Vercel Function's 10s budget
 
 ---
 

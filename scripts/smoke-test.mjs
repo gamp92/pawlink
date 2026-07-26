@@ -397,6 +397,55 @@ async function cleanupVisionReports(ids) {
   record(del.status === 204, 'cleanup reportes de vision (via service role)')
 }
 
+// ── Vision candidates: same species + closest first, cross-species excluded ─
+
+async function callCandidatesRpc(reportId) {
+  const res = await fetch(`${SUPA_URL}/rest/v1/rpc/get_vision_match_candidates`, {
+    method: 'POST',
+    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ report_id: reportId, result_limit: 3 }),
+  })
+  return { status: res.status, json: safeParse(await res.text()) }
+}
+
+async function checkVisionMatchCandidates() {
+  console.log('\nSelección de candidatos para vision (misma especie, más cercano primero):')
+  if (!hasServiceAccess) return skip('candidatos de vision', 'sin service role para llamar el RPC directo')
+
+  const photo = 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=600'
+  const at = (lng) => ({ location: { lat: 10, lng }, city: 'smoke-test', photo_urls: [photo] })
+
+  // Source: lost dog. Candidates: a found CAT at the same spot (must be
+  // excluded — wrong species) and three found DOGS at increasing distance
+  // (must come back nearest-first).
+  const lostDog = await api('POST', '/api/lost-found', { report_type: 'lost', species: 'dog', pet_name: 'SMOKE-CAND-SRC', ...at(-50) })
+  const foundCat = await api('POST', '/api/lost-found', { report_type: 'found', species: 'cat', pet_name: 'SMOKE-CAND-CAT', ...at(-50) })
+  const near = await api('POST', '/api/lost-found', { report_type: 'found', species: 'dog', pet_name: 'SMOKE-CAND-NEAR', ...at(-50.01) })
+  const mid = await api('POST', '/api/lost-found', { report_type: 'found', species: 'dog', pet_name: 'SMOKE-CAND-MID', ...at(-50.05) })
+  const far = await api('POST', '/api/lost-found', { report_type: 'found', species: 'dog', pet_name: 'SMOKE-CAND-FAR', ...at(-50.2) })
+  const ids = [lostDog, foundCat, near, mid, far].map((r) => r.json?.report?.id)
+
+  if (ids.some((id) => !id)) return record(false, 'candidatos de vision', 'no se pudieron crear los reportes de prueba')
+
+  try {
+    const { status, json } = await callCandidatesRpc(ids[0])
+    const returnedIds = (json ?? []).map((row) => row.id)
+
+    record(status === 200, 'RPC get_vision_match_candidates → 200', `status ${status}`)
+    record(!returnedIds.includes(ids[1]), 'excluye al candidato de otra especie (gato)', returnedIds.join(','))
+    record(
+      returnedIds[0] === ids[2] && returnedIds[1] === ids[3] && returnedIds[2] === ids[4],
+      'ordena los candidatos de la misma especie por cercanía (más cercano primero)',
+      returnedIds.join(',')
+    )
+  } finally {
+    if (hasServiceAccess) {
+      const del = await supaRest('DELETE', `lost_found_reports?id=in.(${ids.join(',')})`)
+      record(del.status === 204, 'cleanup candidatos de vision (via service role)')
+    }
+  }
+}
+
 async function checkMatching() {
   console.log('\nMatching con IA (Groq — consume ~la mitad del presupuesto de tokens del minuto):')
   const res = await api('POST', '/api/matching', {
@@ -420,6 +469,7 @@ async function main() {
   await checkAlertSubscriptions()
   await checkPhotoUploads()
   await checkVision()
+  await checkVisionMatchCandidates()
   if (RUN_MATCHING) await checkMatching()
   else skip('POST /api/matching', 'usa --matching para incluirlo (consume tokens de Groq)')
 
