@@ -273,7 +273,7 @@ erDiagram
 
 ## 4. Async workflows (Database Webhooks → Edge Functions)
 
-Three workflows fire on database events. Edge Function code lives in `supabase/functions/<name>/index.ts` and must be deployed manually (`supabase functions deploy <name>`) — it does not auto-deploy on push.
+Four workflows fire on database events. Edge Function code lives in `supabase/functions/<name>/index.ts` and must be deployed manually (`supabase functions deploy <name>`) — it does not auto-deploy on push.
 
 ```mermaid
 sequenceDiagram
@@ -308,5 +308,14 @@ sequenceDiagram
         EF->>DB: read contact from request row<br/>+ animal and shelter names
         DB-->>EF: email, names
         EF->>Resend: confirmation email to adopter
+    end
+
+    rect rgba(128, 128, 128, 0.05)
+        Note over DB,Resend: vision-match-notification — UPDATE lost_found_reports → matched_report_id set
+        DB->>WH: UPDATE matched_report_id (fires once per matched row)
+        WH->>EF: invoke vision-match-notification
+        EF->>DB: read contact_email on this row<br/>+ matched report's pet_name/species
+        DB-->>EF: email (if present), matched pet details
+        EF->>Resend: match email to this row's reporter<br/>(skipped if no contact_email)
     end
 ```
