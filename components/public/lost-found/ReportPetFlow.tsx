@@ -51,6 +51,7 @@ export function ReportPetFlow({
   const [form, setForm] = useState<LostFoundReportForm>(initialLostFoundReportForm)
   const [errors, setErrors] = useState<Partial<Record<keyof LostFoundReportForm, string>>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submissionStage, setSubmissionStage] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [result, setResult] = useState<LostFoundReportSubmissionResult | null>(null)
   const swipeStartYRef = useRef<number | null>(null)
@@ -155,10 +156,12 @@ export function ReportPetFlow({
   }
 
   async function submitReport() {
+    if (isSubmitting) return
     const payload = buildPayload()
     if (!payload) return
 
     setIsSubmitting(true)
+    setSubmissionStage(form.photos.length ? 'Uploading photos...' : 'Submitting report...')
     setSubmitError(null)
     try {
       const photoUpload = await uploadReportPhotos(form.photos)
@@ -167,6 +170,7 @@ export function ReportPetFlow({
         return
       }
 
+      setSubmissionStage('Submitting report...')
       const submissionResult = await submitAnonymousLostFoundReport({
         ...payload,
         ...(photoUpload.urls.length > 0 && { photo_urls: photoUpload.urls }),
@@ -182,6 +186,7 @@ export function ReportPetFlow({
       setSubmitError(error instanceof Error ? error.message : 'Could not prepare report.')
     } finally {
       setIsSubmitting(false)
+      setSubmissionStage(null)
     }
   }
 
@@ -193,6 +198,7 @@ export function ReportPetFlow({
     setSubmitError(null)
     setResult(null)
     setIsSubmitting(false)
+    setSubmissionStage(null)
   }
 
   function handleBackdropClick(event: MouseEvent<HTMLDivElement>) {
@@ -269,6 +275,11 @@ export function ReportPetFlow({
               {step === 'photos' ? <ReportPhotosStep {...stepProps} /> : null}
               {step === 'location' ? <ReportLocationStep {...stepProps} /> : null}
               {step === 'review' ? <LostFoundReportReview form={form} onEdit={setStep} /> : null}
+              {submissionStage ? (
+                <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm font-bold text-violet-800">
+                  {submissionStage}
+                </div>
+              ) : null}
               {submitError ? <ErrorState title="Report not ready" description={submitError} /> : null}
             </div>
           )}
