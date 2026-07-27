@@ -37,63 +37,19 @@ type CreateAdoptionRequestResponseDto = {
   message: string
 }
 
-type UnsupportedAdoptionField =
-  | 'applicant.city'
-  | 'household.living_space_other'
-  | 'household.own_or_rent'
-  | 'household.landlord_allows_pets'
-  | 'household.household_size'
-  | 'household.children_ages'
-  | 'household.other_pets_details'
-  | 'lifestyle.hours_pet_alone'
-  | 'lifestyle.care_time'
-  | 'lifestyle.travel_frequency'
-  | 'adoption_intent.adoption_motivation'
-  | 'adoption_intent.preferred_characteristics'
-  | 'adoption_intent.can_cover_costs'
-  | 'adoption_intent.willing_to_interview'
-  | 'consents.truthful_information_confirmed'
-  | 'consents.contact_consent'
-
 type AdoptionApplicationApiMapping = {
   supportedPayload: CreateAdoptionRequestDto
-  unsupportedFields: UnsupportedAdoptionField[]
 }
 
 export function mapAnonymousApplicationToApi(
   payload: AnonymousAdoptionApplicationPayload,
 ): AdoptionApplicationApiMapping {
-  // TODO: Extend POST /api/adoption-requests when the backend is ready to store
-  // the full anonymous questionnaire. These fields are intentionally surfaced by
-  // the mapper so integration work does not accidentally drop frontend data.
-  const unsupportedFields: UnsupportedAdoptionField[] = [
-    'applicant.city',
-    'household.own_or_rent',
-    'household.landlord_allows_pets',
-    'household.household_size',
-    'lifestyle.hours_pet_alone',
-    'lifestyle.care_time',
-    'lifestyle.travel_frequency',
-    'adoption_intent.adoption_motivation',
-    'adoption_intent.preferred_characteristics',
-    'adoption_intent.can_cover_costs',
-    'adoption_intent.willing_to_interview',
-    'consents.truthful_information_confirmed',
-    'consents.contact_consent',
-  ]
-
-  if (payload.household.children_ages) unsupportedFields.push('household.children_ages')
-  if (payload.household.other_pets_details) unsupportedFields.push('household.other_pets_details')
-
-  const livingSpace = mapLivingSpace(payload.household.living_space)
-  if (!livingSpace) unsupportedFields.push('household.living_space_other')
-
   const familyProfile: AdoptionRequestFamilyProfileDto = {
-    ...(livingSpace && { living_space: livingSpace }),
-    lifestyle: mapLifestyle(payload.lifestyle.activity_level),
-    experience: payload.lifestyle.previous_pet_experience,
-    has_other_pets: payload.household.has_other_pets,
-    has_children: payload.household.has_children,
+    living_space: payload.family_profile.living_space,
+    lifestyle: payload.family_profile.lifestyle,
+    experience: payload.family_profile.experience,
+    has_other_pets: payload.family_profile.has_other_pets,
+    has_children: payload.family_profile.has_children,
   }
 
   return {
@@ -107,7 +63,6 @@ export function mapAnonymousApplicationToApi(
       compatibility_score: payload.compatibility_score,
       compatibility_reasons: payload.compatibility_reasons,
     },
-    unsupportedFields,
   }
 }
 
@@ -134,18 +89,6 @@ export async function submitAnonymousAdoptionApplication(
     status: 'submitted_for_review',
     submitted_at: data.request.created_at,
   }
-}
-
-function mapLivingSpace(livingSpace: AnonymousAdoptionApplicationPayload['household']['living_space']): ApiLivingSpace | null {
-  if (livingSpace === 'apartment') return 'apartment'
-  if (livingSpace === 'house') return 'house_no_yard'
-  return null
-}
-
-function mapLifestyle(activityLevel: AnonymousAdoptionApplicationPayload['lifestyle']['activity_level']): ApiLifestyle {
-  if (activityLevel === 'low') return 'sedentary'
-  if (activityLevel === 'high') return 'active'
-  return 'moderate'
 }
 
 function getApiErrorMessage(body: unknown, status: number): string {

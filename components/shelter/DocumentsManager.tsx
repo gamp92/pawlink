@@ -4,6 +4,8 @@ import { useRef, type ChangeEvent } from 'react'
 import { Button } from '@/components/shared/Button'
 import { DashboardCard } from '@/components/shared/DashboardCard'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { ErrorState } from '@/components/shared/ErrorState'
+import { LoadingState } from '@/components/shared/LoadingState'
 import { SectionTitle } from '@/components/shared/SectionTitle'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ShelterHubLayout } from '@/components/shelter/ShelterHubLayout'
@@ -23,6 +25,7 @@ export function DocumentsManager() {
     removeDocument,
   } = useShelterDocuments(shelterId)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const maxDocumentSizeBytes = 10 * 1024 * 1024
 
   function openFilePicker() {
     fileInputRef.current?.click()
@@ -32,7 +35,21 @@ export function DocumentsManager() {
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
+    if (file.type !== 'application/pdf') {
+      window.alert('Please choose a PDF document.')
+      return
+    }
+    if (file.size > maxDocumentSizeBytes) {
+      window.alert('PDF files must be 10MB or smaller.')
+      return
+    }
     await uploadDocument(file)
+  }
+
+  async function confirmRemoveDocument(documentId: string, fileName: string) {
+    const confirmed = window.confirm(`Delete "${fileName}" from this shelter library?`)
+    if (!confirmed) return
+    await removeDocument(documentId)
   }
 
   return (
@@ -53,10 +70,17 @@ export function DocumentsManager() {
 
           {error ? (
             <div className="mt-4">
-              <EmptyState title="Could not load documents" description={error} />
+              <ErrorState title="Could not load documents" description={error} />
             </div>
           ) : null}
 
+          {isLoading ? (
+            <div className="mt-4">
+              <LoadingState label="Loading shelter documents" />
+            </div>
+          ) : null}
+
+          {!isLoading && !error ? (
           <div className="mt-4 grid gap-3">
             {documents.map((document) => (
               <DashboardCard key={document.id} interactive>
@@ -77,10 +101,10 @@ export function DocumentsManager() {
                         <Button
                           variant="danger"
                           size="sm"
-                          onClick={() => removeDocument(document.id)}
+                          onClick={() => confirmRemoveDocument(document.id, document.file_name)}
                           disabled={pendingDeleteIds.has(document.id)}
                         >
-                          Delete
+                          {pendingDeleteIds.has(document.id) ? 'Deleting...' : 'Delete'}
                         </Button>
                       </div>
                     </div>
@@ -89,8 +113,9 @@ export function DocumentsManager() {
               </DashboardCard>
             ))}
           </div>
+          ) : null}
 
-          {!isLoading && documents.length === 0 ? (
+          {!isLoading && !error && documents.length === 0 ? (
             <div className="mt-4">
               <EmptyState title="No documents uploaded" description="Upload adoption policies to keep your team aligned." />
             </div>

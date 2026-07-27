@@ -2,10 +2,7 @@ import type { AdoptionApplicationStep } from '@/components/public/adoption/types
 
 const steps: Array<{ id: AdoptionApplicationStep; label: string; description: string }> = [
   { id: 'contact', label: 'Contact', description: 'How the shelter reaches you' },
-  { id: 'household', label: 'Home', description: 'Space and family context' },
-  { id: 'lifestyle', label: 'Lifestyle', description: 'Daily rhythm and care' },
-  { id: 'intent', label: 'Intent', description: 'Why adoption fits now' },
-  { id: 'review', label: 'Review', description: 'Check everything once' },
+  { id: 'review', label: 'Review', description: 'Confirm request' },
 ]
 
 export function QuestionnaireProgress({
@@ -19,7 +16,7 @@ export function QuestionnaireProgress({
 
   return (
     <div aria-label="Application progress" className="overflow-x-auto pb-1">
-      <div className="flex min-w-[680px] items-start">
+      <div className="flex min-w-[320px] items-start">
         {steps.map((step, index) => {
           const isCurrent = step.id === currentStep
           const isComplete = index < currentIndex

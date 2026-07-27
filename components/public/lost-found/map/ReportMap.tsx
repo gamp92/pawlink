@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
-import { Circle, MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
+import { Circle, MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from 'react-leaflet'
 import { reportTypeTone, StatusBadge } from '@/components/shared/StatusBadge'
 import { getPetDisplayImage } from '@/components/shared/pet-display-image'
 import type { LostFoundReport, ReportType } from '@/lib/mock-data'
@@ -22,6 +22,8 @@ type ReportMapProps = {
   reports: LostFoundReport[]
   selectedReportId: string
   onSelectReport: (report: LostFoundReport) => void
+  filter: MapFilter
+  onFilterChange: (filter: MapFilter) => void
 }
 
 type UserLocation = {
@@ -29,7 +31,7 @@ type UserLocation = {
   lng: number
 }
 
-type MapFilter = 'all' | ReportType
+type MapFilter = 'all' | ReportType | 'matches'
 
 type ReportCluster = {
   id: string
@@ -41,6 +43,10 @@ type ReportCluster = {
 function hasValidLocation(report: LostFoundReport) {
   const { lat, lng } = report.location
   return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180
+}
+
+function hasVisionMatch(report: LostFoundReport) {
+  return Boolean(report.matched_report_id && typeof report.match_confidence === 'number' && Number.isFinite(report.match_confidence))
 }
 
 function fitReports(map: L.Map, reports: LostFoundReport[], animate = true) {
@@ -230,6 +236,7 @@ function FloatingMapFilters({
           ['all', 'All'],
           ['lost', 'Lost'],
           ['found', 'Found'],
+          ['matches', 'Matches'],
         ].map(([optionValue, label]) => {
           const selected = value === optionValue
           return (
@@ -252,12 +259,14 @@ function FloatingMapFilters({
 function ReportMarker({
   report,
   selected,
+  highlighted,
   hovered,
   onSelect,
   onHoverChange,
 }: {
   report: LostFoundReport
   selected: boolean
+  highlighted: boolean
   hovered: boolean
   onSelect: () => void
   onHoverChange: (hovered: boolean) => void
@@ -299,10 +308,10 @@ function ReportMarker({
     <Marker
       ref={markerRef}
       position={[report.location.lat, report.location.lng]}
-      icon={reportMarkerIcon(report.report_type, selected, hovered)}
+      icon={reportMarkerIcon(report.report_type, highlighted, hovered)}
       title={`${report.report_type} report for ${report.pet_name}`}
       alt={`${report.report_type} report for ${report.pet_name}`}
-      zIndexOffset={selected ? 1000 : 0}
+      zIndexOffset={highlighted ? 1000 : 0}
       keyboard
       eventHandlers={{
         click: onSelect,
@@ -405,24 +414,37 @@ function ClusterMarker({
   )
 }
 
-export default function ReportMap({ reports, selectedReportId, onSelectReport }: ReportMapProps) {
+export default function ReportMap({ reports, selectedReportId, onSelectReport, filter, onFilterChange }: ReportMapProps) {
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null)
   const [locationMessage, setLocationMessage] = useState<string | null>(null)
   const [isLocating, setIsLocating] = useState(false)
   const [mapError, setMapError] = useState<string | null>(null)
   const [tileLayerKey, setTileLayerKey] = useState(0)
   const [hoveredReportId, setHoveredReportId] = useState<string | null>(null)
-  const [mapFilter, setMapFilter] = useState<MapFilter>('all')
 
   useEffect(() => {
     configureLeafletDefaultIcons()
   }, [])
 
   const visibleReports = useMemo(
-    () => reports.filter((report) => hasValidLocation(report) && (mapFilter === 'all' || report.report_type === mapFilter)),
-    [mapFilter, reports],
+    () =>
+      reports.filter((report) => {
+        if (!hasValidLocation(report)) return false
+        if (filter === 'matches') return hasVisionMatch(report)
+        return filter === 'all' || report.report_type === filter
+      }),
+    [filter, reports],
   )
   const selectedReport = visibleReports.find((report) => report.id === selectedReportId)
+  const selectedMatch = selectedReport?.matched_report_id
+    ? reports.find((report) => report.id === selectedReport.matched_report_id && hasValidLocation(report))
+    : undefined
+  const matchLinePositions = selectedReport && selectedMatch
+    ? [
+        [selectedReport.location.lat, selectedReport.location.lng],
+        [selectedMatch.location.lat, selectedMatch.location.lng],
+      ] as [[number, number], [number, number]]
+    : null
   const clusters = useMemo(() => buildClusters(visibleReports), [visibleReports])
   const radiusCenter = selectedReport && hasValidLocation(selectedReport)
     ? [selectedReport.location.lat, selectedReport.location.lng] as [number, number]
@@ -497,6 +519,13 @@ export default function ReportMap({ reports, selectedReportId, onSelectReport }:
           pathOptions={{ color: '#7c3aed', fillColor: '#7c3aed', fillOpacity: 0.045, opacity: 0.32, weight: 2, dashArray: '8 8' }}
         />
 
+        {matchLinePositions ? (
+          <Polyline
+            positions={matchLinePositions}
+            pathOptions={{ color: '#7c3aed', weight: 4, opacity: 0.72, dashArray: '10 10', lineCap: 'round' }}
+          />
+        ) : null}
+
         {clusters.map((cluster) => {
           if (cluster.reports.length > 1) {
             return <ClusterMarker key={cluster.id} cluster={cluster} onSelectReport={onSelectReport} />
@@ -504,12 +533,14 @@ export default function ReportMap({ reports, selectedReportId, onSelectReport }:
 
           const report = cluster.reports[0]
           const selected = selectedReportId === report.id
+          const isMatchedPair = selectedMatch?.id === report.id
           const hovered = hoveredReportId === report.id
           return (
             <ReportMarker
               key={report.id}
               report={report}
               selected={selected}
+              highlighted={selected || isMatchedPair}
               hovered={hovered}
               onSelect={() => onSelectReport(report)}
               onHoverChange={(isHovered) => setHoveredReportId(isHovered ? report.id : null)}
@@ -536,7 +567,7 @@ export default function ReportMap({ reports, selectedReportId, onSelectReport }:
         ) : null}
       </MapContainer>
 
-      <FloatingMapFilters value={mapFilter} onChange={setMapFilter} count={visibleReports.length} />
+      <FloatingMapFilters value={filter} onChange={onFilterChange} count={visibleReports.length} />
 
       {mapError ? (
         <div className="pawlink-map-overlay bottom-3 left-3 right-3 rounded-2xl border border-amber-200 bg-white/95 p-3 text-xs font-bold leading-5 text-amber-700 shadow-sm backdrop-blur">
@@ -553,6 +584,7 @@ export default function ReportMap({ reports, selectedReportId, onSelectReport }:
         <div><span className="pawlink-map-legend-dot pawlink-map-legend-lost" /> Lost</div>
         <div className="mt-1"><span className="pawlink-map-legend-dot pawlink-map-legend-found" /> Found</div>
         <div className="mt-1"><span className="pawlink-map-legend-ring" /> Search radius</div>
+        <div className="mt-1 text-violet-700">━━ Vision match</div>
         {userLocation ? <div className="mt-1 text-violet-700">◎ Your area</div> : null}
       </div>
 

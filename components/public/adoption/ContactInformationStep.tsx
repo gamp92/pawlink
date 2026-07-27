@@ -39,26 +39,15 @@ export function ContactInformationStep({ form, errors, updateField }: AdoptionSt
         />
       </Field>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field id="phone" label="Phone optional" error={errors.phone}>
-          <input
-            id="phone"
-            value={form.phone}
-            onChange={(event) => updateField('phone', event.target.value)}
-            className={inputClassName}
-            autoComplete="tel"
-          />
-        </Field>
-        <Field id="city" label="City" error={errors.city}>
-          <input
-            id="city"
-            value={form.city}
-            onChange={(event) => updateField('city', event.target.value)}
-            className={inputClassName}
-            autoComplete="address-level2"
-          />
-        </Field>
-      </div>
+      <Field id="phone" label="Phone optional" error={errors.phone}>
+        <input
+          id="phone"
+          value={form.phone}
+          onChange={(event) => updateField('phone', event.target.value)}
+          className={inputClassName}
+          autoComplete="tel"
+        />
+      </Field>
     </div>
   )
 }
