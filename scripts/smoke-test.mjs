@@ -328,7 +328,9 @@ async function checkLostFoundContactEmail() {
       const del = await supaRest('DELETE', `lost_found_reports?id=eq.${reportId}`)
       record(del.status === 204, 'cleanup reporte con contact_email (via service role)')
     } else {
-      skip('cleanup reporte con contact_email', 'sin service role')
+      const resolved = await api('PATCH', `/api/lost-found/${reportId}`, { status: 'resolved' })
+      record(resolved.status === 200, "PATCH a 'resolved' (cleanup via status)")
+      skip('cleanup reporte con contact_email', 'sin service role — quedó como resolved')
     }
   }
 }
