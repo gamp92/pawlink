@@ -77,6 +77,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "report_type must be 'lost' or 'found'" }, { status: 400 })
   }
 
+  const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (rest.contact_email != null && (typeof rest.contact_email !== 'string' || !EMAIL_PATTERN.test(rest.contact_email))) {
+    return NextResponse.json({ error: 'contact_email must be a valid email address' }, { status: 400 })
+  }
+
   const supabase = createServerClient()
 
   const { data, error } = await supabase

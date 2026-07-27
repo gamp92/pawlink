@@ -70,7 +70,8 @@ Triggers two side effects: geo-alert to nearby users and vision matching.
     "lng": -99.1277
   },
   "location_notes": "Near Parque México, Condesa",
-  "city": "CDMX"
+  "city": "CDMX",
+  "contact_email": "ana@gmail.com"
 }
 ```
 
@@ -78,6 +79,7 @@ Triggers two side effects: geo-alert to nearby users and vision matching.
 - `photo_urls` must be pre-uploaded to Supabase Storage before calling this endpoint
 - `location` is set by the user clicking the Leaflet map — not real GPS
 - `pet_name` is optional for `found` reports (unknown pet)
+- `contact_email` is optional. If provided, you'll receive an automatic email if this report is later matched to another one via `/api/vision`. It is never returned by `GET /api/lost-found` — server-side only, same privacy posture as an unsubscribe token.
 
 **Response 201:**
 ```json
@@ -92,9 +94,17 @@ Triggers two side effects: geo-alert to nearby users and vision matching.
 }
 ```
 
+**Error responses:**
+```json
+{ "error": "report_type, species and location (lat, lng) are required" }
+{ "error": "report_type must be 'lost' or 'found'" }
+{ "error": "contact_email must be a valid email address" }
+```
+
 **Side effects on creation:**
 1. Supabase Database Webhook triggers `geo-alert` Edge Function → calls `get_users_near_report()` PostGIS function → sends email alerts to alert subscribers within 2km via Resend (see Alert Subscriptions below)
 2. If the report has a photo, `/api/vision` is called automatically against up to 3 candidates: the **closest** open reports of the **same species** and the **opposite** type (`get_vision_match_candidates` PostGIS function) — not every open report, to stay inside the Vercel Function's 10s budget
+3. If this report is later matched to another (via `/api/vision`), a Database Webhook fires on the `UPDATE` and triggers the `vision-match-notification` Edge Function, which emails `contact_email` (if provided) with the matched report's details.
 
 ---
 

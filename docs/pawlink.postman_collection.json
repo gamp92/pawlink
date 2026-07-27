@@ -174,7 +174,7 @@
             "url": { "raw": "{{base_url}}/api/lost-found", "host": ["{{base_url}}"], "path": ["api", "lost-found"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"report_type\": \"lost\",\n  \"pet_name\": \"Max\",\n  \"species\": \"dog\",\n  \"breed\": \"Golden Retriever\",\n  \"color\": \"dorado\",\n  \"description\": \"Perdido cerca del Parque México con collar rojo\",\n  \"photo_urls\": [],\n  \"location\": {\n    \"lat\": 19.4117,\n    \"lng\": -99.1727\n  },\n  \"location_notes\": \"Cerca de Parque México, Condesa\",\n  \"city\": \"Ciudad de México\"\n}"
+              "raw": "{\n  \"report_type\": \"lost\",\n  \"pet_name\": \"Max\",\n  \"species\": \"dog\",\n  \"breed\": \"Golden Retriever\",\n  \"color\": \"dorado\",\n  \"description\": \"Perdido cerca del Parque México con collar rojo\",\n  \"photo_urls\": [],\n  \"location\": {\n    \"lat\": 19.4117,\n    \"lng\": -99.1727\n  },\n  \"location_notes\": \"Cerca de Parque México, Condesa\",\n  \"city\": \"Ciudad de México\",\n  \"contact_email\": \"ana@gmail.com\"\n}"
             }
           }
         },

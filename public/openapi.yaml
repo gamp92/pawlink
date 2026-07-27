@@ -354,6 +354,8 @@ paths:
       description: >
         Side effect: el INSERT dispara un Database Webhook → Edge Function `geo-alert` →
         emails via Resend a suscriptores de alertas (alert_subscriptions) en un radio de 2 km.
+        Si más tarde se confirma un match vía /api/vision, otro Database Webhook dispara
+        `vision-match-notification`, que envía un email a `contact_email` (si se proporcionó).
         Las fotos deben subirse a Storage antes; aquí solo van las URLs.
       requestBody:
         required: true
@@ -378,6 +380,7 @@ paths:
                 photo_urls: { type: array, items: { type: string, format: uri } }
                 location_notes: { type: string, example: Cerca de Parque México }
                 city: { type: string }
+                contact_email: { type: string, format: email, description: Opcional. Recibe un email automático si este reporte hace match más tarde. Nunca se devuelve en GET. }
       responses:
         '201':
           description: Reporte creado (geo-alertas salen asíncronas)
