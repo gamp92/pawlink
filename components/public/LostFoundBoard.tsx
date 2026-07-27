@@ -196,7 +196,6 @@ export function LostFoundBoard() {
   const [selectedId, setSelectedId] = useState(lostFoundReports[0]?.id ?? '')
   const [isReportFlowOpen, setIsReportFlowOpen] = useState(false)
   const [isAlertFlowOpen, setIsAlertFlowOpen] = useState(false)
-  const [notifiedReportId, setNotifiedReportId] = useState<string | null>(null)
 
   useEffect(() => {
     let isMounted = true
@@ -270,7 +269,6 @@ export function LostFoundBoard() {
 
   function selectReport(report: LostFoundReport) {
     setSelectedId(report.id)
-    setNotifiedReportId(null)
   }
 
   function handleReportSubmitted(report: LostFoundReport) {
@@ -282,7 +280,6 @@ export function LostFoundBoard() {
     setFilter('all')
     setQuery('')
     setSortBy('newest')
-    setNotifiedReportId(null)
   }
 
   useEffect(() => {
@@ -452,9 +449,7 @@ export function LostFoundBoard() {
                   timeAgo={timeAgoFor(index)}
                   selected={selectedReport?.id === report.id}
                   onSelect={() => selectReport(report)}
-                  onNotify={() => setNotifiedReportId(report.id)}
                   matchedReport={report.matched_report_id ? reports.find((item) => item.id === report.matched_report_id) ?? null : null}
-                  notified={notifiedReportId === report.id}
                 />
               ))}
             </div>
@@ -478,18 +473,14 @@ function ReportCard({
   timeAgo,
   selected,
   onSelect,
-  onNotify,
   matchedReport,
-  notified,
 }: {
   report: LostFoundReport
   distance: string
   timeAgo: string
   selected: boolean
   onSelect: () => void
-  onNotify: () => void
   matchedReport: LostFoundReport | null
-  notified: boolean
 }) {
   const imageUrl = getPetDisplayImage(report)
   const petName = report.pet_name || 'Unknown pet'
@@ -554,22 +545,9 @@ function ReportCard({
                 <p className="mt-1 text-xs leading-5 text-slate-600">
                   Possible match with {matchedReport.pet_name} at {report.match_confidence}% confidence.
                 </p>
-                {notified ? (
-                  <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-700">
-                    Owner notified in mock workflow.
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onNotify()
-                    }}
-                    className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-xl border border-violet-600 bg-violet-600 px-3 text-xs font-black text-white"
-                  >
-                    Notify owner
-                  </button>
-                )}
+                <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-xs font-bold text-slate-600">
+                  Both sides receive an automatic email if they left their contact info.
+                </div>
               </div>
             ) : null}
           </div>

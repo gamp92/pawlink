@@ -2,6 +2,7 @@
 
 import type { MouseEvent, PointerEvent } from 'react'
 import { useEffect, useRef, useState } from 'react'
+import { ContactEmailField } from '@/components/public/lost-found/ContactEmailField'
 import { FlowProgress } from '@/components/public/lost-found/FlowProgress'
 import { LostFoundReportReview } from '@/components/public/lost-found/LostFoundReportReview'
 import { LostFoundReportSuccess } from '@/components/public/lost-found/LostFoundReportSuccess'
@@ -269,7 +270,12 @@ export function ReportPetFlow({
               {step === 'pet' ? <PetInformationStep {...stepProps} /> : null}
               {step === 'photos' ? <ReportPhotosStep {...stepProps} /> : null}
               {step === 'location' ? <ReportLocationStep {...stepProps} /> : null}
-              {step === 'review' ? <LostFoundReportReview form={form} onEdit={setStep} /> : null}
+              {step === 'review' ? (
+                <>
+                  <LostFoundReportReview form={form} onEdit={setStep} />
+                  <ContactEmailField form={form} onChange={(value) => updateField('contact_email', value)} />
+                </>
+              ) : null}
               {submitError ? <ErrorState title="Report not ready" description={submitError} /> : null}
             </div>
           )}
