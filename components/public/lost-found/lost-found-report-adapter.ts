@@ -20,6 +20,7 @@ export type LostFoundReportApiPayload = {
   location_notes: string
   city?: string
   photo_urls?: string[]
+  contact_email?: string
 }
 
 export type LostFoundPhotoUploadResult =
@@ -76,6 +77,7 @@ export function mapLostFoundReportToApi(form: LostFoundReportForm): AnonymousLos
     description: form.description.trim(),
     location_notes: form.location_notes.trim(),
     city: form.city.trim() || undefined,
+    contact_email: form.contact_email.trim() || undefined,
     location: {
       lat: form.location.lat,
       lng: form.location.lng,

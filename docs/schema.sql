@@ -166,6 +166,7 @@ create table lost_found_reports (
   -- Vision matching result (from Rekognition)
   matched_report_id     uuid references lost_found_reports(id),
   match_confidence      numeric(5,2),          -- 0.00 to 100.00
+  contact_email         text,                  -- optional, for automatic match notification
   created_at      timestamptz default now(),
   updated_at      timestamptz default now()
 );
@@ -176,6 +177,10 @@ create index lost_found_reports_status_idx
   on lost_found_reports(status);
 create index lost_found_reports_type_idx
   on lost_found_reports(report_type);
+
+-- Database Webhook trigger `on_lost_found_matched` (AFTER UPDATE on lost_found_reports,
+-- invokes Edge Function vision-match-notification) exists live in Supabase but is not
+-- expressed here — see docs/architecture.md section 4 for the full async-workflow picture.
 
 
 -- ============================================================

@@ -28,6 +28,7 @@ export type LostFoundReportForm = {
   city: string
   location: SelectedLocation | null
   photos: SelectedPetPhoto[]
+  contact_email: string
 }
 
 export type AnonymousLostFoundReportPayload = {
@@ -44,6 +45,7 @@ export type AnonymousLostFoundReportPayload = {
     lng: number
   }
   photo_urls?: string[]
+  contact_email?: string
 }
 
 export type LostFoundReportSubmissionResult = {
@@ -108,6 +110,7 @@ export const initialLostFoundReportForm: LostFoundReportForm = {
   city: '',
   location: null,
   photos: [],
+  contact_email: '',
 }
 
 export const initialAlertSubscriptionForm: AlertSubscriptionForm = {

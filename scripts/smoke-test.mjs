@@ -287,6 +287,54 @@ async function checkLostFoundLifecycle() {
   }
 }
 
+// ── Lost & Found match notification: contact_email validation + privacy ────
+
+async function checkLostFoundContactEmail() {
+  console.log('\nNotificación de match en Lost & Found (contact_email):')
+
+  const withEmail = await api('POST', '/api/lost-found', {
+    report_type: 'lost', species: 'dog', color: 'negro',
+    description: 'Smoke test contact_email', location: { lat: 10, lng: -60 },
+    location_notes: 'Smoke test', city: 'smoke-test',
+    contact_email: 'test+smokematch@gmail.com',
+  })
+  record(withEmail.status === 201, 'POST /api/lost-found con contact_email válido → 201')
+  const reportId = withEmail.json?.report?.id
+
+  const badEmail = await api('POST', '/api/lost-found', {
+    report_type: 'lost', species: 'dog', color: 'negro',
+    description: 'Smoke test bad email', location: { lat: 10, lng: -60 },
+    location_notes: 'Smoke test', city: 'smoke-test',
+    contact_email: 'not-an-email',
+  })
+  record(badEmail.status === 400, 'POST /api/lost-found con contact_email inválido → 400')
+
+  const longEmail = await api('POST', '/api/lost-found', {
+    report_type: 'lost', species: 'dog', color: 'negro',
+    description: 'Smoke test long email', location: { lat: 10, lng: -60 },
+    location_notes: 'Smoke test', city: 'smoke-test',
+    contact_email: 'a'.repeat(256) + '@example.com',
+  })
+  record(longEmail.status === 400, 'POST /api/lost-found con contact_email demasiado largo (>255) → 400')
+
+  if (!reportId) return
+
+  try {
+    const list = await api('GET', '/api/lost-found?limit=50')
+    const found = list.json?.reports?.find((r) => r.id === reportId)
+    record(Boolean(found) && !('contact_email' in found), 'GET /api/lost-found nunca incluye contact_email', JSON.stringify(Object.keys(found ?? {})))
+  } finally {
+    if (hasServiceAccess) {
+      const del = await supaRest('DELETE', `lost_found_reports?id=eq.${reportId}`)
+      record(del.status === 204, 'cleanup reporte con contact_email (via service role)')
+    } else {
+      const resolved = await api('PATCH', `/api/lost-found/${reportId}`, { status: 'resolved' })
+      record(resolved.status === 200, "PATCH a 'resolved' (cleanup via status)")
+      skip('cleanup reporte con contact_email', 'sin service role — quedó como resolved')
+    }
+  }
+}
+
 // ── Alert subscriptions: POST (upsert) → unsubscribe by token ───────────────
 
 async function checkAlertSubscriptions() {
@@ -586,6 +634,7 @@ async function main() {
   await checkAdoptionLifecycle(shelterId)
   await checkAdoptionApprovalMarksAnimalAdopted(shelterId)
   await checkLostFoundLifecycle()
+  await checkLostFoundContactEmail()
   await checkAlertSubscriptions()
   await checkPhotoUploads()
   await checkShelterDocumentUpload(shelterId)

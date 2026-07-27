@@ -588,6 +588,10 @@ function ReportCard({
                   <VisionMatchPhoto report={matchedReport} label="Possible match" />
                 </div>
 
+                <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-xs font-bold text-slate-600">
+                  Both sides receive an automatic email if they left their contact info.
+                </div>
+
                 <div className="mt-3 flex items-center justify-between gap-3 border-t border-violet-100 pt-3">
                   <p className="text-xs font-semibold leading-5 text-slate-600">
                     Backend image comparison result.
