@@ -170,8 +170,11 @@
   overflow-wrap: anywhere;
 }
 
+/* The LLM streams plain text with real newlines (and sometimes markdown lists). Without
+   pre-wrap the CSS collapses them into one wall of text. */
 .bubbleText {
   margin: 0;
+  white-space: pre-wrap;
 }
 
 .bubbleUser {
@@ -202,12 +205,14 @@
 .chipRow {
   display: flex;
   gap: var(--space-2);
-  margin: var(--space-2) 0 0;
-  padding: 0 0 var(--space-1);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3) 0 var(--space-2);
+  border-top: 1px solid var(--color-border);
   overflow-x: auto;
-  list-style: none;
-  /* The bubble is narrow; let the row bleed to the bubble's padding edges. */
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
   scrollbar-width: thin;
+  list-style: none;
 }
 
 .chip {
@@ -215,16 +220,18 @@
   flex-shrink: 0;
   align-items: center;
   gap: var(--space-2);
-  max-width: 11rem;
+  max-width: 12rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
   background: var(--color-surface);
-  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
+  padding: var(--space-1) var(--space-4) var(--space-1) var(--space-1);
+  box-shadow: var(--shadow-xs);
+  scroll-snap-align: start;
 }
 
 .chipPhoto {
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 3rem;
+  height: 3rem;
   flex-shrink: 0;
   border-radius: var(--radius-full);
   background: var(--color-surface-muted);
