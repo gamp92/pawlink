@@ -186,7 +186,6 @@ export function ReportPetFlow({
   }
 
   function closeAndReset() {
-    form.photos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl))
     onClose()
     setStep('pet')
     setForm(initialLostFoundReportForm)
