@@ -78,7 +78,7 @@ export async function POST(request: Request) {
   }
 
   const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  if (rest.contact_email != null && (typeof rest.contact_email !== 'string' || !EMAIL_PATTERN.test(rest.contact_email))) {
+  if (rest.contact_email != null && (typeof rest.contact_email !== 'string' || !EMAIL_PATTERN.test(rest.contact_email) || rest.contact_email.length > 255)) {
     return NextResponse.json({ error: 'contact_email must be a valid email address' }, { status: 400 })
   }
 

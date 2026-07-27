@@ -309,6 +309,14 @@ async function checkLostFoundContactEmail() {
   })
   record(badEmail.status === 400, 'POST /api/lost-found con contact_email inválido → 400')
 
+  const longEmail = await api('POST', '/api/lost-found', {
+    report_type: 'lost', species: 'dog', color: 'negro',
+    description: 'Smoke test long email', location: { lat: 10, lng: -60 },
+    location_notes: 'Smoke test', city: 'smoke-test',
+    contact_email: 'a'.repeat(256) + '@example.com',
+  })
+  record(longEmail.status === 400, 'POST /api/lost-found con contact_email demasiado largo (>255) → 400')
+
   if (!reportId) return
 
   try {
