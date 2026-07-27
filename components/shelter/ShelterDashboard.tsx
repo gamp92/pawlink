@@ -66,7 +66,7 @@ export function ShelterDashboard() {
             <SectionTitle
               title="Recent activity"
               description="A chronological view of the most important workspace updates."
-              action={<StatusBadge label="Live mock" tone="purple" />}
+              action={<StatusBadge label="Live" tone="purple" />}
             />
             <div className="mt-5 space-y-3">
               {recentActivities.map((activity, index) => (

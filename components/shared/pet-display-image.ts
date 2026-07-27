@@ -32,10 +32,10 @@ function fallbackImageFor(species: Species, id: string) {
 
 // Visual demo fallback only. Real API-provided photo_urls always win and nothing is persisted.
 export function getAnimalDisplayImage(animal: Animal) {
-  return animal.photo_urls[0] ?? fallbackImageFor(animal.species, animal.id)
+  return animal.photo_urls.find((url) => url.trim().length > 0) ?? fallbackImageFor(animal.species, animal.id)
 }
 
 // Visual demo fallback only. Real API-provided photo_urls always win and nothing is persisted.
 export function getPetDisplayImage(report: LostFoundReport) {
-  return report.photo_urls[0] ?? fallbackImageFor(report.species, report.id)
+  return report.photo_urls.find((url) => url.trim().length > 0) ?? fallbackImageFor(report.species, report.id)
 }

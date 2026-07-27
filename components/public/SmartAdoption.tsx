@@ -9,6 +9,7 @@ import { LoadingState } from '@/components/shared/LoadingState'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { getAnimalDisplayImage } from '@/components/shared/pet-display-image'
 import { AdoptionApplicationFlow } from '@/components/public/adoption/AdoptionApplicationFlow'
+import type { AdoptionFamilyProfile } from '@/components/public/adoption/types'
 import {
   requestSmartMatches,
   type MatchingApiAnimalResult,
@@ -68,6 +69,7 @@ type ApiAnimal = {
 }
 
 const fallbackAvailableAnimals = mockAnimals.filter((animal) => animal.status === 'available')
+const dashboardTestShelterId = '7a2f59a5-7d2f-477c-b11d-fe7c98d7aa30'
 
 const initialProfile: FamilyProfile = {
   living_space: 'apartment',
@@ -306,6 +308,7 @@ function getMatchingKey(profile: FamilyProfile) {
 
 function buildMatchingPayload(profile: FamilyProfile): MatchingApiPayload {
   return {
+    shelter_id: dashboardTestShelterId,
     family_profile: {
       living_space: profile.living_space,
       lifestyle: profile.lifestyle,
@@ -313,6 +316,16 @@ function buildMatchingPayload(profile: FamilyProfile): MatchingApiPayload {
       has_children: profile.has_children,
       has_other_pets: profile.has_other_pets,
     },
+  }
+}
+
+function toAdoptionFamilyProfile(profile: FamilyProfile): AdoptionFamilyProfile {
+  return {
+    living_space: profile.living_space,
+    lifestyle: profile.lifestyle,
+    experience: profile.experience,
+    has_children: profile.has_children,
+    has_other_pets: profile.has_other_pets,
   }
 }
 
@@ -351,7 +364,10 @@ export function SmartAdoption() {
 
     async function loadAnimals() {
       try {
-        const response = await fetch('/api/animals/public', { cache: 'no-store' })
+        const response = await fetch(
+          `/api/animals/public?shelter_id=${encodeURIComponent(dashboardTestShelterId)}`,
+          { cache: 'no-store' },
+        )
         if (!response.ok) {
           throw new Error('Could not load available animals')
         }
@@ -660,6 +676,7 @@ export function SmartAdoption() {
 
       <AdoptionApplicationFlow
         match={selectedMatch ?? null}
+        familyProfile={toAdoptionFamilyProfile(profile)}
         open={isApplicationOpen}
         onClose={() => setIsApplicationOpen(false)}
       />

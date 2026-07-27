@@ -129,12 +129,13 @@ Updates a report — typically to mark it as resolved.
 
 ---
 
-## Photo Uploads
+## Photo & Document Uploads
 
 ### POST /api/uploads
-Mints a single-use signed upload URL so a photo can be uploaded directly to
-Supabase Storage (public `pets` bucket). One request per photo. Used by
-anonymous Lost & Found reports and by the shelter dashboard's animal photos.
+Mints a single-use signed upload URL for uploading files directly to Supabase Storage.
+Used for photos (public `pets` bucket) by anonymous Lost & Found reports and the
+shelter dashboard, and for documents (private `documents` bucket) by the shelter dashboard.
+One request per file.
 
 **Auth:** None. Public endpoint — same trust model as every other write endpoint today.
 
@@ -144,8 +145,9 @@ anonymous Lost & Found reports and by the shelter dashboard's animal photos.
 ```
 
 **Validation:**
-- `content_type` required — exactly `image/jpeg`, `image/png` or `image/webp`
-- `context` optional — `lost-found` (default) or `animal`. Only changes the storage folder.
+- `content_type` required — depends on `context`: `image/jpeg`, `image/png` or `image/webp` for `lost-found`/`animal`; `application/pdf` for `document`
+- `context` optional — `lost-found` (default), `animal`, or `document`. Only changes the storage destination.
+- `context: "document"` additionally requires `shelter_id` (uuid) in the body — the file is stored in a per-shelter folder in the private `documents` bucket, not the flat folders used by the other contexts.
 - `file_name` optional metadata, max 255 chars — never used in the storage path
 
 **Response 201:**
@@ -153,25 +155,38 @@ anonymous Lost & Found reports and by the shelter dashboard's animal photos.
 {
   "upload_url": "https://<project>.supabase.co/storage/v1/object/upload/sign/pets/lost-found/<uuid>.jpg?token=...",
   "public_url": "https://<project>.supabase.co/storage/v1/object/public/pets/lost-found/<uuid>.jpg",
+  "storage_path": "lost-found/<uuid>.jpg",
   "expires_in": 7200
 }
 ```
 `context: "animal"` produces the same shape with `animals/<uuid>.<ext>` in place of `lost-found/<uuid>.<ext>`.
 
-**Client flow (per photo):**
-1. `POST /api/uploads` with the file's `content_type` (and `context` if uploading an animal photo)
+`context: "document"` produces:
+```json
+{
+  "upload_url": "https://<project>.supabase.co/storage/v1/object/upload/sign/documents/<shelter_id>/<uuid>.pdf?token=...",
+  "public_url": null,
+  "storage_path": "<shelter_id>/<uuid>.pdf",
+  "expires_in": 7200
+}
+```
+`public_url` is always `null` for `document` — the `documents` bucket is private. After the `PUT` succeeds, register the document with `POST /api/documents` (see `f1-shelter-hub.md`) so the shelter's dashboard can list it.
+
+**Client flow (per photo/document):**
+1. `POST /api/uploads` with the file's `content_type` (and `context`/`shelter_id` if uploading a shelter document)
 2. `PUT upload_url` with the raw file bytes and a `Content-Type` header
-3. Collect `public_url` and submit it in the calling resource's `photo_urls`
+3. For photos: collect `public_url` and submit it in the calling resource's `photo_urls`. For documents: call `POST /api/documents` with `storage_path` to register it (see `f1-shelter-hub.md`).
 
 **Notes:**
-- The bucket enforces max 5MB and image mime types at upload time; the token expires in 2 hours and only works for its one path
+- The bucket enforces max size and allowed mime types at upload time; the token expires in 2 hours and only works for its one path. `pets`: 5MB, images only. `documents`: 10MB, PDF only.
 - Photos uploaded but never attached to a submitted resource stay in the bucket (accepted MVP trade-off)
 - `/api/vision` already accepts these URLs (its allowlist includes the project's Supabase hostname)
 
 **Error 400:**
 ```json
-{ "error": "content_type must be image/jpeg, image/png or image/webp" }
-{ "error": "context must be lost-found or animal" }
+{ "error": "content_type must be one of: image/jpeg, image/png, image/webp" }
+{ "error": "context must be lost-found, animal or document" }
+{ "error": "shelter_id is required for context: document" }
 ```
 
 ---

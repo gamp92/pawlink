@@ -68,6 +68,12 @@ export function useAdoptionRequests({ shelterId }: UseAdoptionRequestsOptions) {
 
       try {
         await patchAdoptionRequest(requestId, payload)
+        const latest = await fetchDashboardRequests(shelterId, fallbackRequests)
+        if (mutationVersionRef.current[requestId] === mutationVersion) {
+          setData(latest.data)
+          setIsFallback(latest.isFallback)
+          setError(latest.error)
+        }
         return true
       } catch (error) {
         if (mutationVersionRef.current[requestId] === mutationVersion) {
@@ -81,7 +87,7 @@ export function useAdoptionRequests({ shelterId }: UseAdoptionRequestsOptions) {
         }
       }
     },
-    [data, setRequestPending],
+    [data, setRequestPending, shelterId],
   )
 
   return useMemo(

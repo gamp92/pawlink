@@ -1,10 +1,9 @@
 import { Button } from '@/components/shared/Button'
 import { Card } from '@/components/shared/Card'
-import { SelectedPetSummary } from '@/components/public/adoption/SelectedPetSummary'
 import type {
+  AdoptionFamilyProfile,
   AdoptionApplicationForm,
   AdoptionApplicationStep,
-  SelectedAdoptionMatch,
 } from '@/components/public/adoption/types'
 
 type ReviewSection = {
@@ -13,18 +12,35 @@ type ReviewSection = {
   rows: Array<[string, string]>
 }
 
-function yesNo(value: boolean | null) {
-  if (value === null) return 'Not answered'
+const livingSpaceLabels: Record<AdoptionFamilyProfile['living_space'], string> = {
+  apartment: 'Apartment',
+  house_no_yard: 'House',
+  house_yard: 'House with yard',
+}
+
+const lifestyleLabels: Record<AdoptionFamilyProfile['lifestyle'], string> = {
+  sedentary: 'Calm routine',
+  moderate: 'Moderate activity',
+  active: 'Active lifestyle',
+}
+
+const experienceLabels: Record<AdoptionFamilyProfile['experience'], string> = {
+  none: 'First-time adopter',
+  some: 'Some pet experience',
+  experienced: 'Experienced pet caregiver',
+}
+
+function yesNo(value: boolean) {
   return value ? 'Yes' : 'No'
 }
 
 export function ApplicationReviewStep({
   form,
-  match,
+  familyProfile,
   onEdit,
 }: {
   form: AdoptionApplicationForm
-  match: SelectedAdoptionMatch
+  familyProfile: AdoptionFamilyProfile
   onEdit: (step: AdoptionApplicationStep) => void
 }) {
   const sections: ReviewSection[] = [
@@ -35,51 +51,23 @@ export function ApplicationReviewStep({
         ['Name', `${form.first_name} ${form.last_name}`],
         ['Email', form.email],
         ['Phone', form.phone || 'Not provided'],
-        ['City', form.city],
       ],
     },
     {
-      title: 'Home and household',
-      step: 'household',
+      title: 'Match profile used',
+      step: 'contact',
       rows: [
-        ['Living space', form.living_space || 'Not answered'],
-        ['Own or rent', form.own_or_rent || 'Not answered'],
-        ['Landlord allows pets', form.own_or_rent === 'rent' ? yesNo(form.landlord_allows_pets) : 'Not applicable'],
-        ['Household size', form.household_size],
-        ['Children', yesNo(form.has_children)],
-        ['Children ages', form.children_ages || 'Not provided'],
-        ['Other pets', yesNo(form.has_other_pets)],
-        ['Other pets details', form.other_pets_details || 'Not provided'],
-      ],
-    },
-    {
-      title: 'Lifestyle',
-      step: 'lifestyle',
-      rows: [
-        ['Activity level', form.activity_level || 'Not answered'],
-        ['Hours alone', `${form.hours_pet_alone} hours`],
-        ['Care time', form.care_time],
-        ['Travel frequency', form.travel_frequency || 'Not answered'],
-        ['Pet experience', form.previous_pet_experience || 'Not answered'],
-      ],
-    },
-    {
-      title: 'Adoption intent',
-      step: 'intent',
-      rows: [
-        ['Motivation', form.adoption_motivation],
-        ['Preferred characteristics', form.preferred_characteristics],
-        ['Can cover costs', form.can_cover_costs ? 'Yes' : 'No'],
-        ['Shelter interview', form.willing_to_interview ? 'Yes' : 'No'],
-        ['Truthful information', form.truthful_information_confirmed ? 'Confirmed' : 'Not confirmed'],
-        ['Email contact consent', form.contact_consent ? 'Confirmed' : 'Not confirmed'],
+        ['Living space', livingSpaceLabels[familyProfile.living_space]],
+        ['Routine', lifestyleLabels[familyProfile.lifestyle]],
+        ['Experience', experienceLabels[familyProfile.experience]],
+        ['Children at home', yesNo(familyProfile.has_children)],
+        ['Other pets', yesNo(familyProfile.has_other_pets)],
       ],
     },
   ]
 
   return (
     <div className="space-y-4">
-      <SelectedPetSummary match={match} />
       {sections.map((section) => (
         <Card key={section.title} className="rounded-[1.5rem]">
           <div className="flex items-center justify-between gap-3">
@@ -89,9 +77,11 @@ export function ApplicationReviewStep({
               </span>
               <h3 className="text-base font-black text-slate-950">{section.title}</h3>
             </div>
-            <Button type="button" variant="secondary" size="sm" onClick={() => onEdit(section.step)}>
-              Edit
-            </Button>
+            {section.title === 'Applicant' ? (
+              <Button type="button" variant="secondary" size="sm" onClick={() => onEdit(section.step)}>
+                Edit
+              </Button>
+            ) : null}
           </div>
           <dl className="mt-3 space-y-3">
             {section.rows.map(([label, value]) => (
@@ -106,7 +96,7 @@ export function ApplicationReviewStep({
       <Card className="rounded-[1.5rem] border-amber-200 bg-amber-50">
         <p className="text-sm font-black text-amber-800">Before submitting</p>
         <p className="mt-1 text-sm leading-6 text-slate-700">
-          This starts a shelter review. The shelter will contact the applicant by email after reviewing the information.
+          This starts a shelter review. The shelter receives your contact details, selected pet, match score, and the profile already used for matching.
         </p>
       </Card>
     </div>

@@ -93,6 +93,37 @@
             "method": "GET",
             "url": { "raw": "{{base_url}}/api/shelters/{{shelter_id}}", "host": ["{{base_url}}"], "path": ["api", "shelters", "{{shelter_id}}"] }
           }
+        },
+        {
+          "name": "POST /api/documents",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/documents", "host": ["{{base_url}}"], "path": ["api", "documents"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shelter_id\": \"{{shelter_id}}\",\n  \"file_name\": \"politicas_adopcion.pdf\",\n  \"storage_path\": \"REPLACE_WITH_STORAGE_PATH\"\n}"
+            }
+          }
+        },
+        {
+          "name": "GET /api/documents",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/documents?shelter_id={{shelter_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "documents"],
+              "query": [{ "key": "shelter_id", "value": "{{shelter_id}}" }]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/documents/:id",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{base_url}}/api/documents/REPLACE_WITH_DOCUMENT_ID", "host": ["{{base_url}}"], "path": ["api", "documents", "REPLACE_WITH_DOCUMENT_ID"] }
+          }
         }
       ]
     },

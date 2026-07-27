@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import type React from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/shared/Button'
 import { Card } from '@/components/shared/Card'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -13,13 +13,12 @@ import { AlertSubscriptionFlow } from '@/components/public/lost-found/AlertSubsc
 import { ReportPetFlow } from '@/components/public/lost-found/ReportPetFlow'
 import { getPetDisplayImage } from '@/components/shared/pet-display-image'
 import {
-  lostFoundReports,
   type LostFoundReport,
   type ReportType,
   type Species,
 } from '@/lib/mock-data'
 
-type ReportFilter = 'all' | ReportType
+type ReportFilter = 'all' | ReportType | 'matches'
 type ReportSort = 'newest' | 'oldest' | 'name'
 
 type ApiLostFoundReport = {
@@ -161,6 +160,15 @@ function distanceFor(index: number) {
   return `${(0.7 + index * 0.4).toFixed(1)} km away`
 }
 
+function formatMatchConfidence(value: number | null) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null
+  return `${Math.round(value)}%`
+}
+
+function hasVisionMatch(report: LostFoundReport) {
+  return Boolean(report.matched_report_id && typeof report.match_confidence === 'number' && Number.isFinite(report.match_confidence))
+}
+
 function optionClass(isActive: boolean) {
   return `pawlink-filter-chip ${
     isActive ? 'pawlink-filter-chip-active' : ''
@@ -186,21 +194,20 @@ function reportMatchesQuery(report: LostFoundReport, query: string) {
 }
 
 export function LostFoundBoard() {
-  const [reports, setReports] = useState<LostFoundReport[]>(lostFoundReports)
+  const [reports, setReports] = useState<LostFoundReport[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isUsingFallback, setIsUsingFallback] = useState(false)
   const [filter, setFilter] = useState<ReportFilter>('all')
   const [query, setQuery] = useState('')
   const [sortBy, setSortBy] = useState<ReportSort>('newest')
-  const [selectedId, setSelectedId] = useState(lostFoundReports[0]?.id ?? '')
+  const [selectedId, setSelectedId] = useState('')
   const [isReportFlowOpen, setIsReportFlowOpen] = useState(false)
   const [isAlertFlowOpen, setIsAlertFlowOpen] = useState(false)
 
-  useEffect(() => {
-    let isMounted = true
-
-    async function loadReports() {
+  const loadReports = useCallback(
+    async (preferredReportId?: string) => {
+      setIsLoading(true)
       try {
         const response = await fetch('/api/lost-found', { cache: 'no-store' })
         if (!response.ok) {
@@ -210,49 +217,51 @@ export function LostFoundBoard() {
         const payload = (await response.json()) as { reports?: ApiLostFoundReport[] }
         const apiReports = payload.reports ?? []
 
-        if (!isMounted) return
-
         if (apiReports.length === 0) {
-          setReports(lostFoundReports)
-          setSelectedId(lostFoundReports[0]?.id ?? '')
-          setIsUsingFallback(true)
-          setError('No public reports returned yet. Showing fallback reports.')
+          setReports([])
+          setSelectedId('')
+          setIsUsingFallback(false)
+          setError(null)
           return
         }
 
         const { reports: nextReports, unmappable } = adaptApiReports(apiReports)
         setReports(nextReports)
-        setSelectedId(nextReports[0]?.id ?? '')
+        setSelectedId(
+          preferredReportId && nextReports.some((report) => report.id === preferredReportId)
+            ? preferredReportId
+            : nextReports[0]?.id ?? '',
+        )
         setIsUsingFallback(false)
         setError(
           unmappable > 0
             ? `${unmappable} report${unmappable === 1 ? '' : 's'} had an unreadable location and ${unmappable === 1 ? 'is' : 'are'} not shown on the map.`
             : null,
         )
-      } catch {
-        if (!isMounted) return
-        setReports(lostFoundReports)
-        setSelectedId(lostFoundReports[0]?.id ?? '')
-        setIsUsingFallback(true)
-        setError('Lost and found API is unavailable. Showing fallback reports.')
+      } catch (loadError) {
+        setReports([])
+        setSelectedId('')
+        setIsUsingFallback(false)
+        setError(loadError instanceof Error ? loadError.message : 'Lost and found API is unavailable.')
       } finally {
-        if (isMounted) setIsLoading(false)
+        setIsLoading(false)
       }
-    }
+    },
+    [],
+  )
 
+  useEffect(() => {
     loadReports()
-
-    return () => {
-      isMounted = false
-    }
-  }, [])
+  }, [loadReports])
 
   const visibleReports = useMemo(
     () => {
       const filteredReports = reports.filter(
         (report) =>
           report.status === 'open' &&
-          (filter === 'all' || report.report_type === filter) &&
+          (filter === 'matches'
+            ? hasVisionMatch(report)
+            : filter === 'all' || report.report_type === filter) &&
           reportMatchesQuery(report, query),
       )
 
@@ -280,6 +289,7 @@ export function LostFoundBoard() {
     setFilter('all')
     setQuery('')
     setSortBy('newest')
+    loadReports(report.id)
   }
 
   useEffect(() => {
@@ -343,6 +353,7 @@ export function LostFoundBoard() {
               ['all', 'All', 'Map'],
               ['lost', 'Lost', 'L'],
               ['found', 'Found', 'F'],
+              ['matches', 'Matches', '◎'],
             ].map(([value, label, icon]) => {
               const selected = filter === value
               return (
@@ -402,7 +413,13 @@ export function LostFoundBoard() {
       <div className="pawlink-explorer-grid">
         <section className="min-w-0">
           <div className="relative">
-            <ReportMap reports={visibleReports} selectedReportId={selectedReport?.id ?? ''} onSelectReport={selectReport} />
+            <ReportMap
+              reports={visibleReports}
+              selectedReportId={selectedReport?.id ?? ''}
+              onSelectReport={selectReport}
+              filter={filter}
+              onFilterChange={setFilter}
+            />
             <div className="pointer-events-none absolute bottom-4 right-4 z-[500] lg:hidden">
               <Button
                 onClick={() => setIsReportFlowOpen(true)}
@@ -419,7 +436,9 @@ export function LostFoundBoard() {
           <Card className="pawlink-report-list-shell rounded-[1.5rem] p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-lg font-black tracking-tight text-slate-950">Open reports</h3>
+                <h3 className="text-lg font-black tracking-tight text-slate-950">
+                  {filter === 'matches' ? 'Vision matches' : 'Open reports'}
+                </h3>
                 <p className="mt-1 text-sm text-slate-500">Select a report to focus its map marker.</p>
               </div>
             </div>
@@ -450,6 +469,14 @@ export function LostFoundBoard() {
                   selected={selectedReport?.id === report.id}
                   onSelect={() => selectReport(report)}
                   matchedReport={report.matched_report_id ? reports.find((item) => item.id === report.matched_report_id) ?? null : null}
+                  onSelectMatch={
+                    report.matched_report_id
+                      ? () => {
+                          const match = reports.find((item) => item.id === report.matched_report_id)
+                          if (match) selectReport(match)
+                        }
+                      : undefined
+                  }
                 />
               ))}
             </div>
@@ -474,6 +501,7 @@ function ReportCard({
   selected,
   onSelect,
   matchedReport,
+  onSelectMatch,
 }: {
   report: LostFoundReport
   distance: string
@@ -481,10 +509,12 @@ function ReportCard({
   selected: boolean
   onSelect: () => void
   matchedReport: LostFoundReport | null
+  onSelectMatch?: () => void
 }) {
   const imageUrl = getPetDisplayImage(report)
   const petName = report.pet_name || 'Unknown pet'
-  const showVision = selected && report.report_type === 'found' && matchedReport && report.match_confidence
+  const matchConfidence = formatMatchConfidence(report.match_confidence)
+  const showVision = selected && matchedReport && matchConfidence
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLElement>) {
     if (event.currentTarget !== event.target) return
@@ -540,18 +570,69 @@ function ReportCard({
 
           <div className="pawlink-selected-details text-left">
             {showVision ? (
-              <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50 p-3">
-                <p className="text-sm font-black text-violet-900">Vision match found</p>
-                <p className="mt-1 text-xs leading-5 text-slate-600">
-                  Possible match with {matchedReport.pet_name} at {report.match_confidence}% confidence.
-                </p>
+              <div className="mt-3 rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-white p-3 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-violet-950">Vision match found</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-600">
+                      Comparing this report with {matchedReport.pet_name || 'another report'}.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-violet-600 px-3 py-1 text-xs font-black text-white shadow-sm">
+                    {matchConfidence}
+                  </span>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <VisionMatchPhoto report={report} label="This report" />
+                  <VisionMatchPhoto report={matchedReport} label="Possible match" />
+                </div>
+
                 <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-xs font-bold text-slate-600">
                   Both sides receive an automatic email if they left their contact info.
+                </div>
+
+                <div className="mt-3 flex items-center justify-between gap-3 border-t border-violet-100 pt-3">
+                  <p className="text-xs font-semibold leading-5 text-slate-600">
+                    Backend image comparison result.
+                  </p>
+                  {onSelectMatch ? (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onSelectMatch()
+                      }}
+                      className="shrink-0 rounded-full border border-violet-200 bg-white px-3 py-2 text-xs font-black text-violet-700 shadow-sm transition hover:border-violet-300 hover:bg-violet-50 focus:outline-none focus:ring-4 focus:ring-violet-100"
+                    >
+                      View match
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ) : null}
           </div>
         </div>
     </article>
+  )
+}
+
+function VisionMatchPhoto({ report, label }: { report: LostFoundReport; label: string }) {
+  const imageUrl = getPetDisplayImage(report)
+  const petName = report.pet_name || 'Unknown pet'
+
+  return (
+    <div className="min-w-0">
+      <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-slate-100">
+        <img src={imageUrl} alt={`${label}: ${petName}`} className="h-full w-full object-cover" />
+        <div className="absolute left-2 top-2">
+          <StatusBadge label={report.report_type} tone={reportTypeTone(report.report_type)} />
+        </div>
+      </div>
+      <p className="mt-2 truncate text-xs font-black text-slate-950">{petName}</p>
+      <p className="truncate text-[11px] font-semibold text-slate-500">
+        {speciesIcon[report.species]} · {report.breed}
+      </p>
+    </div>
   )
 }

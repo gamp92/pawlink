@@ -12,7 +12,11 @@ type ReviewSection = {
 }
 
 function compactRows(rows: Array<[string, string | undefined | null]>) {
-  return rows.filter(([, value]) => Boolean(value?.trim())) as Array<[string, string]>
+  return rows.reduce<Array<[string, string]>>((nextRows, [label, value]) => {
+    const trimmedValue = value?.trim()
+    if (trimmedValue) nextRows.push([label, trimmedValue])
+    return nextRows
+  }, [])
 }
 
 export function LostFoundReportReview({

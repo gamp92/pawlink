@@ -408,15 +408,28 @@ create trigger lost_found_reports_updated_at
 -- Uncomment and run separately if F4 is implemented
 -- ============================================================
 
--- create table shelter_documents (
---   id            uuid primary key default gen_random_uuid(),
---   shelter_id    uuid references shelters(id) on delete cascade,
---   file_name     text not null,
---   file_url      text not null,              -- Supabase Storage URL
---   status        text default 'processing',  -- 'processing' | 'ready' | 'error'
---   chunk_count   int,                        -- number of chunks generated
---   created_at    timestamptz default now()
--- );
+create table shelter_documents (
+  id            uuid primary key default gen_random_uuid(),
+  shelter_id    uuid references shelters(id) on delete cascade,
+  file_name     text not null,
+  storage_path  text not null,
+  status        text default 'ready',            -- always 'ready' today — no ingestion pipeline sets any other value
+  created_at    timestamptz default now()
+);
+
+create index shelter_documents_shelter_id_idx on shelter_documents(shelter_id);
+
+alter table shelter_documents enable row level security;
+
+create policy "shelter_documents_shelter_all"
+  on shelter_documents for all
+  using (
+    exists (
+      select 1 from shelter_users
+      where shelter_users.shelter_id = shelter_documents.shelter_id
+      and shelter_users.user_id = auth.uid()
+    )
+  );
 
 -- create table document_chunks (
 --   id            uuid primary key default gen_random_uuid(),
@@ -435,18 +448,7 @@ create trigger lost_found_reports_updated_at
 --   on document_chunks using ivfflat (embedding vector_cosine_ops)
 --   with (lists = 100);                       -- adjust lists based on data volume
 
--- alter table shelter_documents enable row level security;
 -- alter table document_chunks    enable row level security;
-
--- create policy "shelter_documents_shelter_write"
---   on shelter_documents for all
---   using (
---     exists (
---       select 1 from shelter_users
---       where shelter_users.shelter_id = shelter_documents.shelter_id
---       and shelter_users.user_id = auth.uid()
---     )
---   );
 
 -- create policy "document_chunks_public_read"
 --   on document_chunks for select using (true);
