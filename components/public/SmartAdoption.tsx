@@ -23,6 +23,7 @@ type Experience = 'none' | 'some' | 'experienced'
 type SizeFilter = 'all' | Animal['size']
 type EnergyFilter = 'all' | Animal['energy_level']
 type SpeciesFilter = 'all' | Species
+type ShelterFilter = 'all' | string
 type ProfileSection = 'home' | 'time' | 'experience' | 'children' | 'pets'
 type SortOption = 'best_match' | 'newest' | 'age'
 
@@ -40,12 +41,18 @@ type Filters = {
   energy_level: EnergyFilter
   good_with_kids: boolean
   good_with_pets: boolean
+  shelter_id: ShelterFilter
 }
 
 type MatchResult = {
   animal: Animal
   score: number
   reasons: string[]
+}
+
+type ShelterOption = {
+  value: ShelterFilter
+  name: string
 }
 
 type SmartMatchState = {
@@ -69,7 +76,7 @@ type ApiAnimal = {
 }
 
 const fallbackAvailableAnimals = mockAnimals.filter((animal) => animal.status === 'available')
-const dashboardTestShelterId = '7a2f59a5-7d2f-477c-b11d-fe7c98d7aa30'
+const publicAnimalsPageSize = 100
 
 const initialProfile: FamilyProfile = {
   living_space: 'apartment',
@@ -85,6 +92,7 @@ const initialFilters: Filters = {
   energy_level: 'all',
   good_with_kids: false,
   good_with_pets: false,
+  shelter_id: 'all',
 }
 
 const petsPerPage = 4
@@ -236,6 +244,7 @@ function matchesFilters(result: MatchResult, filters: Filters) {
   if (filters.energy_level !== 'all' && animal.energy_level !== filters.energy_level) return false
   if (filters.good_with_kids && !animal.good_with_kids) return false
   if (filters.good_with_pets && !animal.good_with_pets) return false
+  if (filters.shelter_id !== 'all' && !filters.shelter_id.split('|').includes(animal.shelter.id)) return false
   return true
 }
 
@@ -300,6 +309,14 @@ function toMatchResults(apiResults: MatchingApiAnimalResult[], availableAnimals:
   }))
 }
 
+function mergeSmartAndLocalMatches(smartResults: MatchResult[], localResults: MatchResult[]): MatchResult[] {
+  const smartResultIds = new Set(smartResults.map((result) => result.animal.id))
+  return [
+    ...smartResults,
+    ...localResults.filter((result) => !smartResultIds.has(result.animal.id)),
+  ]
+}
+
 function getMatchingKey(profile: FamilyProfile) {
   return JSON.stringify({
     family_profile: profile,
@@ -308,7 +325,6 @@ function getMatchingKey(profile: FamilyProfile) {
 
 function buildMatchingPayload(profile: FamilyProfile): MatchingApiPayload {
   return {
-    shelter_id: dashboardTestShelterId,
     family_profile: {
       living_space: profile.living_space,
       lifestyle: profile.lifestyle,
@@ -336,7 +352,35 @@ function activeFilterCount(filters: Filters) {
     filters.energy_level !== 'all',
     filters.good_with_kids,
     filters.good_with_pets,
+    filters.shelter_id !== 'all',
   ].filter(Boolean).length
+}
+
+function getShelterOptions(animals: Animal[]) {
+  const shelterMap = new Map<string, { name: string; ids: Set<string> }>()
+  animals.forEach((animal) => {
+    if (!animal.shelter.id || animal.shelter.id === 'unknown-shelter') return
+    const normalizedName = animal.shelter.name.trim().toLowerCase()
+    if (!normalizedName) return
+
+    const existingShelter = shelterMap.get(normalizedName)
+    if (existingShelter) {
+      existingShelter.ids.add(animal.shelter.id)
+      return
+    }
+
+    shelterMap.set(normalizedName, {
+      name: animal.shelter.name.trim(),
+      ids: new Set([animal.shelter.id]),
+    })
+  })
+
+  return Array.from(shelterMap.values())
+    .map((shelter) => ({
+      value: Array.from(shelter.ids).sort().join('|'),
+      name: shelter.name,
+    }))
+    .sort((first, second) => first.name.localeCompare(second.name))
 }
 
 export function SmartAdoption() {
@@ -364,27 +408,39 @@ export function SmartAdoption() {
 
     async function loadAnimals() {
       try {
-        const response = await fetch(
-          `/api/animals/public?shelter_id=${encodeURIComponent(dashboardTestShelterId)}`,
-          { cache: 'no-store' },
-        )
-        if (!response.ok) {
-          throw new Error('Could not load available animals')
-        }
+        const loadedAnimals: ApiAnimal[] = []
+        let offset = 0
+        let total: number | null = null
 
-        const payload = (await response.json()) as { animals?: ApiAnimal[] }
-        const apiAnimals = payload.animals ?? []
+        do {
+          const searchParams = new URLSearchParams({
+            limit: String(publicAnimalsPageSize),
+            offset: String(offset),
+          })
+          const response = await fetch(`/api/animals/public?${searchParams.toString()}`, { cache: 'no-store' })
+          if (!response.ok) {
+            throw new Error('Could not load available animals')
+          }
+
+          const payload = (await response.json()) as { animals?: ApiAnimal[]; total?: number; limit?: number; offset?: number }
+          const pageAnimals = payload.animals ?? []
+          loadedAnimals.push(...pageAnimals)
+          total = typeof payload.total === 'number' ? payload.total : loadedAnimals.length
+
+          const pageLimit = typeof payload.limit === 'number' && payload.limit > 0 ? payload.limit : publicAnimalsPageSize
+          offset += pageLimit
+        } while (total !== null && loadedAnimals.length < total)
 
         if (!isMounted) return
 
-        if (apiAnimals.length === 0) {
+        if (loadedAnimals.length === 0) {
           setAvailableAnimals(fallbackAvailableAnimals)
           setIsUsingFallback(true)
           setError('No public animals returned yet. Showing fallback animals.')
           return
         }
 
-        const nextAnimals = apiAnimals.map(toAnimal)
+        const nextAnimals = loadedAnimals.map(toAnimal)
         setAvailableAnimals(nextAnimals)
         setSelectedId(nextAnimals[0]?.id ?? '')
         setIsUsingFallback(false)
@@ -414,6 +470,7 @@ export function SmartAdoption() {
   }, [])
 
   const matchingKey = useMemo(() => getMatchingKey(profile), [profile])
+  const shelterOptions = useMemo(() => getShelterOptions(availableAnimals), [availableAnimals])
 
   const localMatchResults = useMemo(
     () => {
@@ -517,7 +574,7 @@ export function SmartAdoption() {
 
     setSmartMatches({
       key: requestKey,
-      results: toMatchResults(result.data.results, availableAnimals),
+      results: mergeSmartAndLocalMatches(toMatchResults(result.data.results, availableAnimals), localMatchResults),
     })
     setHasMatched(true)
     setCurrentPage(1)
@@ -575,8 +632,10 @@ export function SmartAdoption() {
               isMatching={isMatching}
               isUsingSmartMatches={isUsingSmartMatches}
               filters={filters}
+              shelterOptions={shelterOptions}
               activeFilterCount={activeFilterCount(filters)}
               onSortChange={setSortBy}
+              onShelterChange={(shelterId) => setFilters((current) => ({ ...current, shelter_id: shelterId }))}
               onApplyFilter={applyFilter}
               onClearFilters={clearFilters}
             />
@@ -1012,8 +1071,10 @@ function PetResultsToolbar({
   isMatching,
   isUsingSmartMatches,
   filters,
+  shelterOptions,
   activeFilterCount,
   onSortChange,
+  onShelterChange,
   onApplyFilter,
   onClearFilters,
 }: {
@@ -1025,8 +1086,10 @@ function PetResultsToolbar({
   isMatching: boolean
   isUsingSmartMatches: boolean
   filters: Filters
+  shelterOptions: ShelterOption[]
   activeFilterCount: number
   onSortChange: (sort: SortOption) => void
+  onShelterChange: (shelterId: ShelterFilter) => void
   onApplyFilter: (update: (current: Filters) => Filters) => void
   onClearFilters: () => void
 }) {
@@ -1043,18 +1106,36 @@ function PetResultsToolbar({
                 : 'Using local matching while smart matching is unavailable.'}
           </p>
         </div>
-        <label className="flex items-center gap-2 text-sm font-bold text-slate-600">
-          <span>Sort</span>
-          <select
-            value={sortBy}
-            onChange={(event) => onSortChange(event.target.value as SortOption)}
-            className="public-select"
-          >
-            <option value="best_match">Best match</option>
-            <option value="newest">Newest</option>
-            <option value="age">Age</option>
-          </select>
-        </label>
+        <div className="pawlink-results-select-row">
+          <label className="pawlink-results-select-field">
+            <span>Refuge</span>
+            <select
+              value={filters.shelter_id}
+              onChange={(event) => onShelterChange(event.target.value)}
+              className="public-select pawlink-results-select"
+            >
+              <option value="all">All shelters</option>
+              {shelterOptions.map((shelter) => (
+                <option key={shelter.value} value={shelter.value}>
+                  {shelter.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="pawlink-results-select-field">
+            <span>Sort</span>
+            <select
+              value={sortBy}
+              onChange={(event) => onSortChange(event.target.value as SortOption)}
+              className="public-select pawlink-results-select"
+            >
+              <option value="best_match">Best match</option>
+              <option value="newest">Newest</option>
+              <option value="age">Age</option>
+            </select>
+          </label>
+        </div>
       </div>
       <PetFilterChips
         filters={filters}
@@ -1075,6 +1156,8 @@ function ResultsPagination({
   totalPages: number
   onPageChange: (page: number) => void
 }) {
+  const paginationItems = getPaginationItems(currentPage, totalPages)
+
   return (
     <nav className="pawlink-adoption-pagination" aria-label="Pet results pages">
       <button
@@ -1085,18 +1168,25 @@ function ResultsPagination({
         Previous
       </button>
       <div className="pawlink-adoption-page-dots">
-        {Array.from({ length: totalPages }, (_, index) => {
-          const page = index + 1
+        {paginationItems.map((item, index) => {
+          if (item === 'ellipsis') {
+            return (
+              <span key={`ellipsis-${index}`} className="pawlink-adoption-page-ellipsis" aria-hidden="true">
+                ...
+              </span>
+            )
+          }
+
           return (
             <button
-              key={page}
+              key={item}
               type="button"
-              onClick={() => onPageChange(page)}
-              aria-label={`Go to page ${page}`}
-              aria-current={currentPage === page ? 'page' : undefined}
-              data-active={currentPage === page}
+              onClick={() => onPageChange(item)}
+              aria-label={`Go to page ${item}`}
+              aria-current={currentPage === item ? 'page' : undefined}
+              data-active={currentPage === item}
             >
-              {page}
+              {item}
             </button>
           )
         })}
@@ -1110,6 +1200,47 @@ function ResultsPagination({
       </button>
     </nav>
   )
+}
+
+function getPaginationItems(currentPage: number, totalPages: number): Array<number | 'ellipsis'> {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1)
+  }
+
+  const pages = new Set<number>([1, totalPages])
+  const windowStart = Math.max(2, currentPage - 1)
+  const windowEnd = Math.min(totalPages - 1, currentPage + 1)
+
+  for (let page = windowStart; page <= windowEnd; page += 1) {
+    pages.add(page)
+  }
+
+  if (currentPage <= 4) {
+    pages.add(2)
+    pages.add(3)
+    pages.add(4)
+  }
+
+  if (currentPage >= totalPages - 3) {
+    pages.add(totalPages - 3)
+    pages.add(totalPages - 2)
+    pages.add(totalPages - 1)
+  }
+
+  const sortedPages = Array.from(pages)
+    .filter((page) => page >= 1 && page <= totalPages)
+    .sort((a, b) => a - b)
+
+  const items: Array<number | 'ellipsis'> = []
+  sortedPages.forEach((page, index) => {
+    const previousPage = sortedPages[index - 1]
+    if (previousPage && page - previousPage > 1) {
+      items.push('ellipsis')
+    }
+    items.push(page)
+  })
+
+  return items
 }
 
 function animalTraits(animal: Animal) {
