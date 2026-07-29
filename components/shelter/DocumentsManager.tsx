@@ -12,6 +12,13 @@ import { ShelterHubLayout } from '@/components/shelter/ShelterHubLayout'
 import { useShelterWorkspace } from '@/components/shelter/ShelterWorkspaceContext'
 import { useShelterDocuments } from '@/components/shelter/hooks/useShelterDocuments'
 
+function documentStatusTone(status: string) {
+  if (status === 'ready') return 'green' as const
+  if (status === 'processing') return 'amber' as const
+  if (status === 'error') return 'red' as const
+  return 'slate' as const
+}
+
 export function DocumentsManager() {
   const { shelterId } = useShelterWorkspace()
   const {
@@ -19,8 +26,10 @@ export function DocumentsManager() {
     isLoading,
     error,
     isUploading,
+    isIndexing,
     uploadError,
     pendingDeleteIds,
+    findByFileName,
     uploadDocument,
     removeDocument,
   } = useShelterDocuments(shelterId)
@@ -43,11 +52,22 @@ export function DocumentsManager() {
       window.alert('PDF files must be 10MB or smaller.')
       return
     }
-    await uploadDocument(file)
+
+    const existing = findByFileName(file.name)
+    if (existing) {
+      const confirmed = window.confirm(
+        `"${file.name}" already exists. Replace it? The assistant will forget the previous version.`,
+      )
+      if (!confirmed) return
+    }
+
+    await uploadDocument(file, existing?.id)
   }
 
   async function confirmRemoveDocument(documentId: string, fileName: string) {
-    const confirmed = window.confirm(`Delete "${fileName}" from this shelter library?`)
+    const confirmed = window.confirm(
+      `Delete "${fileName}"? The assistant will stop answering from this document.`,
+    )
     if (!confirmed) return
     await removeDocument(documentId)
   }
@@ -64,8 +84,13 @@ export function DocumentsManager() {
           <DashboardCard>
             <SectionTitle
               title="Document library"
-              description="PDFs you upload here are stored securely and only visible to your shelter."
+              description="PDFs uploaded here feed the shelter assistant. It only answers from these documents."
             />
+            {isIndexing ? (
+              <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800">
+                Indexing in progress. A document is usable by the assistant once it turns ready, usually under a minute.
+              </p>
+            ) : null}
           </DashboardCard>
 
           {error ? (
@@ -94,10 +119,16 @@ export function DocumentsManager() {
                         <p className="truncate text-sm font-black text-slate-950">{document.file_name}</p>
                         <p className="mt-1 text-xs font-semibold text-slate-500">
                           {new Date(document.created_at).toLocaleDateString()}
+                          {document.status === 'ready' && document.chunk_count
+                            ? ` · ${document.chunk_count} fragments indexed`
+                            : ''}
                         </p>
+                        {document.status === 'error' && document.error ? (
+                          <p className="mt-1 text-xs font-semibold text-rose-700">{document.error}</p>
+                        ) : null}
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
-                        <StatusBadge label={document.status} tone="green" />
+                        <StatusBadge label={document.status} tone={documentStatusTone(document.status)} />
                         <Button
                           variant="danger"
                           size="sm"

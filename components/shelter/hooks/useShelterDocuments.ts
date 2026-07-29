@@ -8,6 +8,9 @@ import {
   type UploadedDocument,
 } from '@/components/shelter/document-adapter'
 
+const POLL_INTERVAL_MS = 5000
+const MAX_POLLS = 24
+
 export function useShelterDocuments(shelterId: string) {
   const [documents, setDocuments] = useState<UploadedDocument[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -39,10 +42,60 @@ export function useShelterDocuments(shelterId: string) {
     refetch()
   }, [refetch])
 
+  const isIndexing = documents.some((document) => document.status === 'processing')
+
+  useEffect(() => {
+    if (!isIndexing) return
+
+    let polls = 0
+    let isActive = true
+
+    const timer = setInterval(async () => {
+      polls += 1
+      if (polls > MAX_POLLS) {
+        clearInterval(timer)
+        return
+      }
+
+      try {
+        const result = await fetchShelterDocuments(shelterId)
+        if (isActive) setDocuments(result)
+      } catch {
+        return
+      }
+    }, POLL_INTERVAL_MS)
+
+    return () => {
+      isActive = false
+      clearInterval(timer)
+    }
+  }, [isIndexing, shelterId])
+
+  const findByFileName = useCallback(
+    (fileName: string) => documents.find((document) => document.file_name === fileName),
+    [documents],
+  )
+
   const uploadDocument = useCallback(
-    async (file: File) => {
+    async (file: File, replaceDocumentId?: string) => {
       setUploadError(null)
       setIsUploading(true)
+
+      if (replaceDocumentId) {
+        try {
+          await deleteShelterDocument(replaceDocumentId)
+          setDocuments((current) => current.filter((document) => document.id !== replaceDocumentId))
+        } catch (deleteError) {
+          setIsUploading(false)
+          setUploadError(
+            deleteError instanceof Error
+              ? `Could not replace the previous version: ${deleteError.message}`
+              : 'Could not replace the previous version.',
+          )
+          return false
+        }
+      }
+
       const result = await uploadShelterDocument(shelterId, file)
       setIsUploading(false)
 
@@ -90,8 +143,10 @@ export function useShelterDocuments(shelterId: string) {
     isLoading,
     error,
     isUploading,
+    isIndexing,
     uploadError,
     pendingDeleteIds,
+    findByFileName,
     uploadDocument,
     removeDocument,
   }
