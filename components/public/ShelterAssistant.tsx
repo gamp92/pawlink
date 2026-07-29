@@ -45,6 +45,34 @@ const initialMessages: ChatMessage[] = [
   { id: 'seed-0', role: 'assistant', text: 'Hola, soy el asistente del refugio. Preguntame sobre adopcion, vacunas, requisitos, horarios o documentos.' },
 ]
 
+function chatStorageKey(id: string) {
+  return `pawlink:chat:${id}`
+}
+
+function isChatMessage(value: unknown): value is ChatMessage {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Record<string, unknown>
+  if (typeof candidate.id !== 'string') return false
+  if (candidate.role !== 'user' && candidate.role !== 'assistant') return false
+  if (typeof candidate.text !== 'string') return false
+  if (candidate.citation !== undefined && typeof candidate.citation !== 'string') return false
+  if (candidate.animals !== undefined && !Array.isArray(candidate.animals)) return false
+  return true
+}
+
+function readStoredMessages(id: string): ChatMessage[] | null {
+  try {
+    const raw = sessionStorage.getItem(chatStorageKey(id))
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed) || parsed.length === 0) return null
+    if (!parsed.every(isChatMessage)) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
 type ShelterAssistantProps = {
   shelterId: string
 }
@@ -71,6 +99,29 @@ export function ShelterAssistant({ shelterId }: ShelterAssistantProps) {
     messageIdRef.current += 1
     return `${prefix}-${messageIdRef.current}`
   }
+
+  useEffect(() => {
+    const storedMessages = readStoredMessages(activeShelterId)
+    if (!storedMessages) return
+
+    const highestIdSuffix = storedMessages.reduce((highest, message) => {
+      const suffix = Number(message.id.split('-').pop())
+      return Number.isFinite(suffix) && suffix > highest ? suffix : highest
+    }, messageIdRef.current)
+
+    messageIdRef.current = highestIdSuffix
+    setMessages(storedMessages)
+  }, [activeShelterId])
+
+  useEffect(() => {
+    if (messages === initialMessages) return
+
+    try {
+      sessionStorage.setItem(chatStorageKey(activeShelterId), JSON.stringify(messages))
+    } catch {
+      return
+    }
+  }, [activeShelterId, messages])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
