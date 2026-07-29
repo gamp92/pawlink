@@ -1,14 +1,19 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { StatusBadge } from '@/components/shared/StatusBadge'
+import { Avatar } from '@/components/shared/Avatar'
+import { Badge } from '@/components/shared/Badge'
 import { shelterProfile as fallbackShelterProfile, type ShelterProfile } from '@/lib/mock-data'
+import { AnimalChips, Bubble, Composer, StatRow, type ChatAnimal } from './shelter-assistant'
+import styles from './shelter-assistant/chat.module.css'
 
 type ChatMessage = {
   id: string
   role: 'user' | 'assistant'
   text: string
   citation?: string
+  /** Structured animals from the RAG `inventory` route, rendered as chips under the text. */
+  animals?: ChatAnimal[]
 }
 
 type RagDocument = {
@@ -40,6 +45,34 @@ const initialMessages: ChatMessage[] = [
   { id: 'seed-0', role: 'assistant', text: 'Hola, soy el asistente del refugio. Preguntame sobre adopcion, vacunas, requisitos, horarios o documentos.' },
 ]
 
+function chatStorageKey(id: string) {
+  return `pawlink:chat:${id}`
+}
+
+function isChatMessage(value: unknown): value is ChatMessage {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Record<string, unknown>
+  if (typeof candidate.id !== 'string') return false
+  if (candidate.role !== 'user' && candidate.role !== 'assistant') return false
+  if (typeof candidate.text !== 'string') return false
+  if (candidate.citation !== undefined && typeof candidate.citation !== 'string') return false
+  if (candidate.animals !== undefined && !Array.isArray(candidate.animals)) return false
+  return true
+}
+
+function readStoredMessages(id: string): ChatMessage[] | null {
+  try {
+    const raw = sessionStorage.getItem(chatStorageKey(id))
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed) || parsed.length === 0) return null
+    if (!parsed.every(isChatMessage)) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
 type ShelterAssistantProps = {
   shelterId: string
 }
@@ -56,22 +89,71 @@ export function ShelterAssistant({ shelterId }: ShelterAssistantProps) {
     () => TEST_SHELTERS.find((s) => s.id === shelterId)?.id ?? TEST_SHELTERS[0].id,
   )
   const [documents, setDocuments] = useState<RagDocument[]>([])
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(true)
+  const [documentsError, setDocumentsError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const messageIdRef = useRef(0)
+  const streamAbortRef = useRef<AbortController | null>(null)
+
+  function nextId(prefix: string) {
+    messageIdRef.current += 1
+    return `${prefix}-${messageIdRef.current}`
+  }
+
+  useEffect(() => {
+    const storedMessages = readStoredMessages(activeShelterId)
+    if (!storedMessages) return
+
+    const highestIdSuffix = storedMessages.reduce((highest, message) => {
+      const suffix = Number(message.id.split('-').pop())
+      return Number.isFinite(suffix) && suffix > highest ? suffix : highest
+    }, messageIdRef.current)
+
+    messageIdRef.current = highestIdSuffix
+    setMessages(storedMessages)
+  }, [activeShelterId])
+
+  useEffect(() => {
+    if (messages === initialMessages) return
+
+    try {
+      sessionStorage.setItem(chatStorageKey(activeShelterId), JSON.stringify(messages))
+    } catch {
+      return
+    }
+  }, [activeShelterId, messages])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages])
 
   useEffect(() => {
+    return () => {
+      streamAbortRef.current?.abort()
+    }
+  }, [activeShelterId])
+
+  useEffect(() => {
     let isMounted = true
+
+    setIsLoadingDocuments(true)
+    setDocumentsError(null)
 
     async function loadDocuments() {
       try {
         const response = await fetch(`/api/rag/documents?shelter_id=${activeShelterId}`, { cache: 'no-store' })
+        if (!response.ok) {
+          throw new Error('Could not load documents')
+        }
         const payload = (await response.json()) as { documents?: RagDocument[] }
-        if (isMounted) setDocuments(payload.documents ?? [])
+        if (!isMounted) return
+        setDocuments(payload.documents ?? [])
       } catch {
-        if (isMounted) setDocuments([])
+        if (!isMounted) return
+        setDocuments([])
+        setDocumentsError('Could not reach the RAG service.')
+      } finally {
+        if (isMounted) setIsLoadingDocuments(false)
       }
     }
 
@@ -149,7 +231,7 @@ export function ShelterAssistant({ shelterId }: ShelterAssistantProps) {
     if (!trimmedQuestion || isTyping) return
 
     const userMessage: ChatMessage = {
-      id: `user-${messages.length}`,
+      id: nextId('user'),
       role: 'user',
       text: trimmedQuestion,
     }
@@ -158,14 +240,19 @@ export function ShelterAssistant({ shelterId }: ShelterAssistantProps) {
     setQuestion('')
     setIsTyping(true)
 
-    const assistantId = `assistant-${messages.length + 1}`
+    const assistantId = nextId('assistant')
     setMessages((current) => [...current, { id: assistantId, role: 'assistant', text: '' }])
+
+    streamAbortRef.current?.abort()
+    const controller = new AbortController()
+    streamAbortRef.current = controller
 
     try {
       const response = await fetch('/api/rag/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shelter_id: activeShelterId, question: trimmedQuestion }),
+        signal: controller.signal,
       })
 
       if (!response.ok || !response.body) {
@@ -193,6 +280,13 @@ export function ShelterAssistant({ shelterId }: ShelterAssistantProps) {
               current.map((m) => (m.id === assistantId ? { ...m, text: m.text + event.token } : m)),
             )
           }
+          // `inventory` route emits this before its tokens, so the chips paint while the
+          // LLM is still writing.
+          if (event.animals) {
+            setMessages((current) =>
+              current.map((m) => (m.id === assistantId ? { ...m, animals: event.animals } : m)),
+            )
+          }
           if (event.done) {
             const citation = event.citation
               ? `${event.citation.file_name} - Section ${event.citation.section}`
@@ -201,78 +295,76 @@ export function ShelterAssistant({ shelterId }: ShelterAssistantProps) {
           }
         }
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return
+      }
       setMessages((current) =>
         current.map((m) =>
           m.id === assistantId ? { ...m, text: 'No pude contactar al asistente. Intenta de nuevo.' } : m,
         ),
       )
     } finally {
-      setIsTyping(false)
+      // Only the most recent request owns the typing state. A superseded request
+      // must not clear it; an aborted-but-still-current one must (otherwise
+      // switching shelters mid-stream leaves the composer disabled forever).
+      if (streamAbortRef.current === controller) setIsTyping(false)
     }
   }
 
+  function switchShelter(nextShelterId: string) {
+    streamAbortRef.current?.abort()
+    setActiveShelterId(nextShelterId)
+    setMessages(initialMessages)
+  }
+
   return (
-    <div className="grid gap-4 md:grid-cols-[180px_1fr]">
-      <aside className="rounded-lg border border-slate-200 bg-white p-3">
-        <div className="grid h-10 w-10 place-items-center rounded-full bg-teal-50 text-xs font-bold text-teal-700">
-          {profile.name
-            .split(' ')
-            .map((word) => word[0])
-            .join('')
-            .slice(0, 2)
-            .toUpperCase()}
-        </div>
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <h2 className="text-sm font-bold">{profile.name}</h2>
-          {isLoadingProfile ? <StatusBadge label="Loading" tone="amber" /> : null}
-        </div>
-        <p className="text-[11px] text-slate-500">{profile.city}</p>
-        <p className="mt-3 text-xs leading-5 text-slate-600">{profile.description}</p>
+    <div className={styles.layout}>
+      <aside className="ds-card ds-card-pad-sm">
+        <Avatar name={profile.name} tone="teal" size="sm" />
 
-        {profileError ? (
-          <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-[11px] font-semibold text-amber-700">
-            {profileError}
-          </div>
-        ) : null}
-        {isUsingFallbackProfile ? (
-          <div className="mt-2">
-            <StatusBadge label="Fallback profile" tone="amber" />
-          </div>
-        ) : null}
-
-        <div className="mt-3 space-y-2">
-          {[
-            ['Animals', profile.stats.total_animals],
-            ['Available', profile.stats.available_animals],
-            ['Adoptions', profile.stats.total_adoptions],
-          ].map(([label, value]) => (
-            <div key={label} className="flex justify-between text-xs">
-              <span className="text-slate-500">{label}</span>
-              <strong>{value}</strong>
-            </div>
-          ))}
+        <div className={styles.sidebarHead}>
+          <h2 className={styles.sidebarName}>{profile.name}</h2>
+          {isLoadingProfile ? <Badge tone="amber">Loading</Badge> : null}
         </div>
+        <p className={styles.sidebarCity}>{profile.city}</p>
+        <p className={styles.sidebarDescription}>{profile.description}</p>
 
-        <div className="mt-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold">Documents</h3>
-            <StatusBadge label={`${readyDocuments.length} ready`} tone="teal" />
+        {profileError ? <p className={styles.notice}>{profileError}</p> : null}
+        {isUsingFallbackProfile ? <Badge tone="amber">Fallback profile</Badge> : null}
+
+        <dl className={styles.stack}>
+          <StatRow label="Animals" value={profile.stats.total_animals} />
+          <StatRow label="Available" value={profile.stats.available_animals} />
+          <StatRow label="Adoptions" value={profile.stats.total_adoptions} />
+        </dl>
+
+        <div className={styles.sidebarSection}>
+          <div className={styles.sidebarSectionHead}>
+            <h3 className={styles.sidebarSectionTitle}>Documents</h3>
+            {isLoadingDocuments ? (
+              <Badge tone="amber">Loading</Badge>
+            ) : (
+              <Badge tone="teal">{readyDocuments.length} ready</Badge>
+            )}
           </div>
-          <div className="mt-2 space-y-2">
-            {documents.length === 0 ? (
-              <p className="text-[11px] text-slate-400">No documents ingested for this shelter yet.</p>
+          <div className={styles.stack}>
+            {/* The RAG service is on Render's free tier and cold-starts in 20-45s.
+                Showing the empty state while loading reads as "no documents". */}
+            {isLoadingDocuments ? (
+              <p className={styles.empty}>Loading documents… the RAG service may be waking up.</p>
+            ) : null}
+            {documentsError ? <p className={styles.notice}>{documentsError}</p> : null}
+            {!isLoadingDocuments && !documentsError && documents.length === 0 ? (
+              <p className={styles.empty}>No documents ingested for this shelter yet.</p>
             ) : null}
             {documents.map((document) => (
-              <div key={document.id} className="rounded border border-slate-200 bg-slate-50 p-2">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-bold text-slate-700">{document.file_name}</p>
-                  <StatusBadge
-                    label={document.status}
-                    tone={document.status === 'ready' ? 'green' : 'amber'}
-                  />
+              <div key={document.id} className="ds-card ds-card-muted ds-card-pad-sm">
+                <div className={styles.docRow}>
+                  <p className={styles.docName}>{document.file_name}</p>
+                  <Badge tone={document.status === 'ready' ? 'green' : 'amber'}>{document.status}</Badge>
                 </div>
-                <p className="mt-1 text-[11px] text-slate-400">
+                <p className={styles.docMeta}>
                   {document.chunk_count ? `${document.chunk_count} chunks` : 'Processing'}
                 </p>
               </div>
@@ -281,22 +373,17 @@ export function ShelterAssistant({ shelterId }: ShelterAssistantProps) {
         </div>
       </aside>
 
-      <section
-        className="flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white"
-        style={{ height: 600 }}
-      >
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3">
+      <section className={`ds-card ${styles.panel}`}>
+        <div className={styles.panelHeader}>
           <div>
-            <h2 className="text-sm font-bold">Shelter Assistant</h2>
-            <p className="mt-1 text-[11px] text-slate-400">Live answers from the RAG service</p>
+            <h2 className={styles.panelTitle}>Shelter Assistant</h2>
+            <p className={styles.panelSubtitle}>Live answers from the RAG service</p>
           </div>
           <select
             value={activeShelterId}
-            onChange={(event) => {
-              setActiveShelterId(event.target.value)
-              setMessages(initialMessages)
-            }}
-            className="rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-700"
+            onChange={(event) => switchShelter(event.target.value)}
+            aria-label="Shelter"
+            className={styles.shelterPicker}
           >
             {TEST_SHELTERS.map((s) => (
               <option key={s.id} value={s.id}>
@@ -306,46 +393,33 @@ export function ShelterAssistant({ shelterId }: ShelterAssistantProps) {
           </select>
         </div>
 
-        <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4" style={{ minHeight: 0 }}>
+        <div ref={scrollRef} className={styles.thread}>
           {messages.map((message) => (
-            <div
+            <Bubble
               key={message.id}
-              className={`max-w-[82%] rounded-lg px-3 py-2 text-xs leading-5 ${
-                message.role === 'user'
-                  ? 'ml-auto bg-violet-600 text-white'
-                  : 'border border-slate-200 bg-slate-50 text-slate-700'
-              }`}
+              role={message.role}
+              citation={message.citation}
+              footer={message.animals ? <AnimalChips animals={message.animals} /> : null}
             >
-              <p>{message.text}</p>
-              {message.citation ? (
-                <p className="mt-1 text-[11px] font-semibold text-teal-600">Source: {message.citation}</p>
-              ) : null}
-            </div>
+              {message.text}
+            </Bubble>
           ))}
 
           {isTyping ? (
-            <div className="max-w-[82%] rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
+            <Bubble role="assistant" muted>
               Assistant is typing...
-            </div>
+            </Bubble>
           ) : null}
         </div>
 
-        <div className="flex shrink-0 gap-2 border-t border-slate-200 p-4">
-          <input
+        <div className={styles.panelFooter}>
+          <Composer
             value={question}
-            onChange={(event) => setQuestion(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') sendMessage()
-            }}
+            onChange={setQuestion}
+            onSend={sendMessage}
+            disabled={isTyping}
             placeholder="Ask about adoption, vaccines, requirements, hours, or documents..."
-            className="flex-1 rounded border border-slate-200 px-3 py-2 text-xs text-slate-950"
           />
-          <button
-            onClick={sendMessage}
-            className="rounded bg-violet-600 px-4 py-2 text-xs font-bold text-white"
-          >
-            Send
-          </button>
         </div>
       </section>
     </div>

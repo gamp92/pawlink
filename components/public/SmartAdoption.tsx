@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/shared/Button'
 import { Card } from '@/components/shared/Card'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -399,9 +400,12 @@ export function SmartAdoption() {
   const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false)
   const [openSection, setOpenSection] = useState<ProfileSection>('home')
   const [hasMatched, setHasMatched] = useState(false)
+  const [isBrowsing, setIsBrowsing] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const matchingAbortRef = useRef<AbortController | null>(null)
   const matchingRequestIdRef = useRef(0)
+  const animalParam = useSearchParams().get('animal')
+  const hasAppliedAnimalParamRef = useRef(false)
 
   useEffect(() => {
     let isMounted = true
@@ -507,10 +511,26 @@ export function SmartAdoption() {
   }, [matchResults, selectedId])
 
   const totalPages = Math.max(1, Math.ceil(matchResults.length / petsPerPage))
-  const visibleResults = hasMatched
+  const isGalleryVisible = hasMatched || isBrowsing
+  const visibleResults = isGalleryVisible
     ? matchResults.slice((currentPage - 1) * petsPerPage, currentPage * petsPerPage)
     : []
-  const selectedMatch = hasMatched ? matchResults.find((result) => result.animal.id === selectedId) ?? matchResults[0] : undefined
+  const selectedMatch = isGalleryVisible ? matchResults.find((result) => result.animal.id === selectedId) ?? matchResults[0] : undefined
+
+  useEffect(() => {
+    if (hasAppliedAnimalParamRef.current || !animalParam) return
+    if (!availableAnimals.some((animal) => animal.id === animalParam)) return
+
+    const linkedIndex = matchResults.findIndex((result) => result.animal.id === animalParam)
+    if (linkedIndex === -1) return
+
+    hasAppliedAnimalParamRef.current = true
+    setFilters(initialFilters)
+    setIsBrowsing(true)
+    setSelectedId(animalParam)
+    setCurrentPage(Math.floor(linkedIndex / petsPerPage) + 1)
+    setIsMobileDetailOpen(true)
+  }, [animalParam, availableAnimals, matchResults])
 
   useEffect(() => {
     setCurrentPage(1)
@@ -609,7 +629,7 @@ export function SmartAdoption() {
         </div>
       </header>
 
-      <div className={`mt-10 grid gap-10 ${hasMatched ? 'lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px]' : ''}`}>
+      <div className={`mt-10 grid gap-10 ${isGalleryVisible ? 'lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px]' : ''}`}>
         <main className="min-w-0 space-y-9">
           <MatchProfileCard
             profile={profile}
@@ -622,7 +642,7 @@ export function SmartAdoption() {
             onUpdateMatches={updateSmartMatches}
           />
 
-          {hasMatched ? (
+          {isGalleryVisible ? (
             <PetResultsToolbar
               count={matchResults.length}
               shownCount={visibleResults.length}
@@ -661,14 +681,14 @@ export function SmartAdoption() {
 
           {isLoading ? <LoadingState label="Finding available pets" /> : null}
 
-          {!hasMatched && !isLoading && !isMatching ? (
+          {!isGalleryVisible && !isLoading && !isMatching ? (
             <EmptyState
               title="Ready when you are"
               description="Answer the five profile questions, then find ranked matches in one step."
             />
           ) : null}
 
-          {hasMatched && !isLoading && matchResults.length === 0 ? (
+          {isGalleryVisible && !isLoading && matchResults.length === 0 ? (
             <EmptyState
               title="No matches found"
               description="Try clearing your search or relaxing one filter to see more adoptable animals."
@@ -676,13 +696,13 @@ export function SmartAdoption() {
             />
           ) : null}
 
-          {hasMatched ? (
+          {isGalleryVisible ? (
             <div className="pawlink-adoption-results-grid">
               {visibleResults.map((result) => (
                 <AdoptionPetCard
                   key={result.animal.id}
                   animal={result.animal}
-                  score={result.score}
+                  score={hasMatched ? result.score : undefined}
                   selected={selectedId === result.animal.id}
                   onSelect={() => selectMatch(result.animal.id)}
                 />
@@ -690,7 +710,7 @@ export function SmartAdoption() {
             </div>
           ) : null}
 
-          {hasMatched && matchResults.length > petsPerPage ? (
+          {isGalleryVisible && matchResults.length > petsPerPage ? (
             <ResultsPagination
               currentPage={currentPage}
               totalPages={totalPages}
@@ -699,9 +719,9 @@ export function SmartAdoption() {
           ) : null}
         </main>
 
-        {hasMatched ? (
+        {isGalleryVisible ? (
           <aside className="hidden lg:block">
-            <DetailPanel match={selectedMatch} onRequest={requestSelectedAnimal} />
+            <DetailPanel match={selectedMatch} showScore={hasMatched} onRequest={requestSelectedAnimal} />
           </aside>
         ) : null}
       </div>
@@ -710,8 +730,16 @@ export function SmartAdoption() {
         <div className="fixed bottom-20 left-0 right-0 z-40 px-4 lg:hidden">
           <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur">
             <div className="flex items-center gap-3">
-              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-violet-50 text-sm font-black text-violet-700">
-                {selectedMatch.score}%
+              <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-2xl bg-violet-50 text-sm font-black text-violet-700">
+                {hasMatched ? (
+                  `${selectedMatch.score}%`
+                ) : (
+                  <img
+                    src={getAnimalDisplayImage(selectedMatch.animal)}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                )}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-black text-slate-950">{selectedMatch.animal.name}</p>
@@ -728,6 +756,7 @@ export function SmartAdoption() {
       {selectedMatch && isMobileDetailOpen ? (
         <MobileDetailSheet
           match={selectedMatch}
+          showScore={hasMatched}
           onClose={() => setIsMobileDetailOpen(false)}
           onRequest={requestSelectedAnimal}
         />
@@ -1258,7 +1287,7 @@ function AdoptionPetCard({
   onSelect,
 }: {
   animal: Animal
-  score: number
+  score?: number
   selected: boolean
   onSelect: () => void
 }) {
@@ -1299,7 +1328,7 @@ function AdoptionPetCard({
         >
           ♡
         </button>
-        <div className="pawlink-adoption-match-badge">{score}% match</div>
+        {score !== undefined ? <div className="pawlink-adoption-match-badge">{score}% match</div> : null}
       </div>
 
       <div className="pawlink-adoption-card-body">
@@ -1320,7 +1349,7 @@ function AdoptionPetCard({
   )
 }
 
-function DetailPanel({ match, onRequest }: { match?: MatchResult; onRequest: () => void }) {
+function DetailPanel({ match, showScore, onRequest }: { match?: MatchResult; showScore: boolean; onRequest: () => void }) {
   if (!match) {
     return (
       <EmptyState
@@ -1335,9 +1364,11 @@ function DetailPanel({ match, onRequest }: { match?: MatchResult; onRequest: () 
     <Card className="pawlink-selected-pet-panel">
       <div className="pawlink-photo-frame rounded-[1.35rem]" style={{ aspectRatio: '4 / 3' }}>
         <img src={imageUrl} alt={`${match.animal.name}, ${match.animal.breed} available for adoption`} className="pawlink-pet-photo" />
-        <div className="pawlink-adoption-match-badge">
-          {match.score}% match
-        </div>
+        {showScore ? (
+          <div className="pawlink-adoption-match-badge">
+            {match.score}% match
+          </div>
+        ) : null}
         <button
           type="button"
           className="absolute right-3 top-3 z-10 grid h-10 w-10 place-items-center rounded-full border border-white/70 bg-white/90 text-sm font-black text-violet-700 shadow-sm"
@@ -1375,21 +1406,30 @@ function DetailPanel({ match, onRequest }: { match?: MatchResult; onRequest: () 
         </div>
       </div>
 
-      <div className="mt-4 space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-black text-slate-950">Compatibility</p>
-          <span className="text-sm font-black text-violet-700">{match.score}%</span>
-        </div>
-        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-          <div className="h-full rounded-full bg-gradient-to-r from-violet-600 to-teal-500" style={{ width: `${match.score}%` }} />
-        </div>
-        <p className="pt-2 text-sm font-black text-slate-950">Why this match works</p>
-        {match.reasons.map((reason) => (
-          <div key={reason} className="rounded-xl border border-violet-100 bg-violet-50 p-3 text-sm font-bold text-violet-900">
-            {reason}
+      {showScore ? (
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-black text-slate-950">Compatibility</p>
+            <span className="text-sm font-black text-violet-700">{match.score}%</span>
           </div>
-        ))}
-      </div>
+          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+            <div className="h-full rounded-full bg-gradient-to-r from-violet-600 to-teal-500" style={{ width: `${match.score}%` }} />
+          </div>
+          <p className="pt-2 text-sm font-black text-slate-950">Why this match works</p>
+          {match.reasons.map((reason) => (
+            <div key={reason} className="rounded-xl border border-violet-100 bg-violet-50 p-3 text-sm font-bold text-violet-900">
+              {reason}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-4 rounded-2xl border border-violet-100 bg-violet-50 p-4">
+          <p className="text-sm font-black text-slate-950">Compatibility not calculated yet</p>
+          <p className="mt-1 text-sm font-semibold leading-6 text-slate-600">
+            Answer the five profile questions above to see how well {match.animal.name} fits your home.
+          </p>
+        </div>
+      )}
 
       <div className="mt-4 flex flex-wrap gap-2">
         {animalTraits(match.animal).map((trait) => (
@@ -1408,10 +1448,12 @@ function DetailPanel({ match, onRequest }: { match?: MatchResult; onRequest: () 
 
 function MobileDetailSheet({
   match,
+  showScore,
   onClose,
   onRequest,
 }: {
   match: MatchResult
+  showScore: boolean
   onClose: () => void
   onRequest: () => void
 }) {
@@ -1423,7 +1465,7 @@ function MobileDetailSheet({
         <div className="relative z-10">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-bold text-violet-700">{match.score}% match</p>
+              {showScore ? <p className="text-sm font-bold text-violet-700">{match.score}% match</p> : null}
               <h3 className="mt-1 text-2xl font-black tracking-tight text-slate-950">{match.animal.name}</h3>
               <p className="mt-1 text-sm text-slate-500">{match.animal.shelter.name}</p>
             </div>
@@ -1437,7 +1479,7 @@ function MobileDetailSheet({
             </button>
           </div>
           <div className="mt-4">
-            <DetailPanel match={match} onRequest={onRequest} />
+            <DetailPanel match={match} showScore={showScore} onRequest={onRequest} />
           </div>
         </div>
       </div>
